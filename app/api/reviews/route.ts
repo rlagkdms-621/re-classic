@@ -7,19 +7,19 @@ const supabaseUrl =
 
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
-const supabase = createClient(supabaseUrl, supabaseKey);
-
-function checkSupabaseEnv() {
+function getSupabase() {
   if (!supabaseUrl || !supabaseKey) {
     throw new Error(
-      "Supabase 환경변수가 없습니다. .env.local의 NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY를 확인해주세요."
+      "Supabase 환경변수가 없습니다. NEXT_PUBLIC_SUPABASE_URL과 SUPABASE_SERVICE_ROLE_KEY를 확인해주세요."
     );
   }
+
+  return createClient(supabaseUrl, supabaseKey);
 }
 
 export async function GET() {
   try {
-    checkSupabaseEnv();
+    const supabase = getSupabase();
 
     const { data, error } = await supabase
       .from("reviews")
@@ -41,8 +41,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    checkSupabaseEnv();
-
+    const supabase = getSupabase();
     const { rating, name, comment } = await req.json();
 
     if (!rating || !comment) {
