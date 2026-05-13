@@ -4,17 +4,23 @@ export const runtime = "nodejs";
 
 const supabaseUrl =
   process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
 function getSupabase() {
   if (!supabaseUrl || !supabaseKey) {
-    throw new Error(
-      "Supabase 환경변수가 없습니다. NEXT_PUBLIC_SUPABASE_URL과 SUPABASE_SERVICE_ROLE_KEY를 확인해주세요."
-    );
+    throw new Error("Supabase 환경변수가 없습니다.");
   }
 
   return createClient(supabaseUrl, supabaseKey);
+}
+
+function checkAdmin(req: Request) {
+  const adminSecret = process.env.ADMIN_SECRET || "";
+  const requestSecret = req.headers.get("x-admin-secret") || "";
+
+  if (!adminSecret || requestSecret !== adminSecret) {
+    throw new Error("관리자 권한이 없습니다.");
+  }
 }
 
 export async function GET() {
@@ -30,8 +36,6 @@ export async function GET() {
 
     return Response.json({ generations: data || [] });
   } catch (error: any) {
-    console.error("GENERATIONS_GET_ERROR:", error);
-
     return Response.json(
       { error: error.message || "생성 결과 불러오기 실패" },
       { status: 500 }
@@ -64,11 +68,33 @@ export async function POST(req: Request) {
 
     return Response.json({ generation: data?.[0] });
   } catch (error: any) {
-    console.error("GENERATIONS_POST_ERROR:", error);
-
     return Response.json(
       { error: error.message || "생성 결과 저장 실패" },
       { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(req: Request) {
+  try {
+    checkAdmin(req);
+
+    const supabase = getSupabase();
+    const { id } = await req.json();
+
+    if (!id) {
+      return Response.json({ error: "삭제할 작품 ID가 없습니다." }, { status: 400 });
+    }
+
+    const { error } = await supabase.from("generations").delete().eq("id", id);
+
+    if (error) throw error;
+
+    return Response.json({ success: true });
+  } catch (error: any) {
+    return Response.json(
+      { error: error.message || "전시 작품 삭제 실패" },
+      { status: 403 }
     );
   }
 }

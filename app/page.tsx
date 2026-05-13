@@ -4,32 +4,16 @@ import { useEffect, useState } from "react";
 
 const sampleArtworks = [
   { title: "절규", artist: "Edvard Munch", url: "/samples/1.jpg" },
-  {
-    title: "그랑드 자트 섬의 일요일 오후",
-    artist: "Georges Seurat",
-    url: "/samples/2.jpg",
-  },
-  {
-    title: "이삭 줍는 사람들",
-    artist: "Jean-François Millet",
-    url: "/samples/3.jpg",
-  },
-  {
-    title: "별이 빛나는 밤",
-    artist: "Vincent van Gogh",
-    url: "/samples/4.jpg",
-  },
+  { title: "그랑드 자트 섬의 일요일 오후", artist: "Georges Seurat", url: "/samples/2.jpg" },
+  { title: "이삭 줍는 사람들", artist: "Jean-François Millet", url: "/samples/3.jpg" },
+  { title: "별이 빛나는 밤", artist: "Vincent van Gogh", url: "/samples/4.jpg" },
   { title: "아메리칸 고딕", artist: "Grant Wood", url: "/samples/5.jpg" },
   { title: "아테네 학당", artist: "Raphael", url: "/samples/6.jpg" },
 ];
 
 const keywords = ["SNS 시대", "도시적 고립", "환경 위기"];
 
-type Artwork = {
-  title: string;
-  artist: string;
-  url: string;
-};
+type Artwork = { title: string; artist: string; url: string };
 
 type SuitabilityResult = {
   status?: "변환 가능" | "변화 조금 어려움" | "변환 어려움";
@@ -83,12 +67,10 @@ export default function Home() {
 
   const [resultImage, setResultImage] = useState("");
   const [usedPrompt, setUsedPrompt] = useState("");
-  const [suitabilityResult, setSuitabilityResult] =
-    useState<SuitabilityResult | null>(null);
+  const [suitabilityResult, setSuitabilityResult] = useState<SuitabilityResult | null>(null);
   const [curatorReport, setCuratorReport] = useState<CuratorReport | null>(null);
 
   const [loadingGenerate, setLoadingGenerate] = useState(false);
-
   const [modalImage, setModalImage] = useState<string | null>(null);
   const [modalTitle, setModalTitle] = useState("");
 
@@ -102,18 +84,88 @@ export default function Home() {
   const [showArchive, setShowArchive] = useState(false);
   const [loadingArchive, setLoadingArchive] = useState(false);
 
+  const [adminSecret, setAdminSecret] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
+
   useEffect(() => {
+    const savedAdmin = localStorage.getItem("reclassic_admin_secret");
+    if (savedAdmin) {
+      setAdminSecret(savedAdmin);
+      setIsAdmin(true);
+    }
+
     loadReviews();
     loadGenerations();
   }, []);
 
   async function safeJson(response: Response) {
     const text = await response.text();
-
     try {
       return JSON.parse(text);
     } catch {
       throw new Error(text || "서버 응답 오류");
+    }
+  }
+
+  function loginAdmin() {
+    if (!adminSecret.trim()) {
+      alert("관리자 비밀번호를 입력해주세요.");
+      return;
+    }
+
+    localStorage.setItem("reclassic_admin_secret", adminSecret);
+    setIsAdmin(true);
+    alert("관리자 모드가 켜졌습니다.");
+  }
+
+  function logoutAdmin() {
+    localStorage.removeItem("reclassic_admin_secret");
+    setAdminSecret("");
+    setIsAdmin(false);
+    alert("관리자 모드가 꺼졌습니다.");
+  }
+
+  async function deleteReview(id: string) {
+    if (!confirm("이 후기를 삭제할까요?")) return;
+
+    try {
+      const response = await fetch("/api/reviews", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-secret": adminSecret,
+        },
+        body: JSON.stringify({ id }),
+      });
+
+      const data = await safeJson(response);
+      if (!response.ok) throw new Error(data.error || "후기 삭제 실패");
+
+      await loadReviews();
+    } catch (error: any) {
+      alert(error.message || "후기 삭제 중 오류가 발생했습니다.");
+    }
+  }
+
+  async function deleteGeneration(id: string) {
+    if (!confirm("이 전시 작품을 삭제할까요?")) return;
+
+    try {
+      const response = await fetch("/api/generations", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-secret": adminSecret,
+        },
+        body: JSON.stringify({ id }),
+      });
+
+      const data = await safeJson(response);
+      if (!response.ok) throw new Error(data.error || "전시 작품 삭제 실패");
+
+      await loadGenerations();
+    } catch (error: any) {
+      alert(error.message || "전시 작품 삭제 중 오류가 발생했습니다.");
     }
   }
 
@@ -129,7 +181,6 @@ export default function Home() {
 
   async function loadGenerations() {
     setLoadingArchive(true);
-
     try {
       const response = await fetch("/api/generations");
       const data = await safeJson(response);
@@ -153,18 +204,11 @@ export default function Home() {
       const response = await fetch("/api/reviews", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          rating: reviewRating,
-          name: reviewName,
-          comment: reviewComment,
-        }),
+        body: JSON.stringify({ rating: reviewRating, name: reviewName, comment: reviewComment }),
       });
 
       const data = await safeJson(response);
-
-      if (!response.ok) {
-        throw new Error(data.error || "후기 저장 실패");
-      }
+      if (!response.ok) throw new Error(data.error || "후기 저장 실패");
 
       setReviewName("");
       setReviewComment("");
@@ -201,7 +245,6 @@ export default function Home() {
       });
 
       const data = await safeJson(response);
-
       if (!response.ok) {
         console.error("ARCHIVE_SAVE_ERROR:", data);
         return;
@@ -246,7 +289,6 @@ export default function Home() {
         canvas.height = Math.round(img.height * scale);
 
         const ctx = canvas.getContext("2d");
-
         if (!ctx) {
           reject(new Error("이미지 압축 실패"));
           return;
@@ -334,9 +376,7 @@ export default function Home() {
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error(error);
-      alert(
-        "이미지 저장이 어려운 브라우저입니다. 이미지를 크게 연 뒤 길게 눌러 저장해주세요."
-      );
+      alert("이미지 저장이 어려운 브라우저입니다. 이미지를 크게 연 뒤 길게 눌러 저장해주세요.");
     }
   }
 
@@ -352,10 +392,7 @@ export default function Home() {
     });
 
     const data = await safeJson(response);
-
-    if (!response.ok) {
-      throw new Error(data.error || "적합도 분석 실패");
-    }
+    if (!response.ok) throw new Error(data.error || "적합도 분석 실패");
 
     const suitability = data.suitability as SuitabilityResult;
     const status = String(suitability.status || "").replace(/\s/g, "");
@@ -397,13 +434,11 @@ export default function Home() {
       const compressedOriginalImage = await compressDataUrl(originalImage);
 
       const suitability = await runSuitabilityCheck(compressedOriginalImage);
-
       const normalizedStatus = String(suitability.status || "").replace(/\s/g, "");
 
       const isBlocked =
         suitability.canGenerate === false ||
-        (normalizedStatus.includes("어려움") &&
-          !normalizedStatus.includes("조금"));
+        (normalizedStatus.includes("어려움") && !normalizedStatus.includes("조금"));
 
       if (isBlocked) {
         setSuitabilityResult({
@@ -416,18 +451,14 @@ export default function Home() {
         setResultImage("");
         setUsedPrompt("");
         setCuratorReport(null);
-
         alert("이미지 변환이 불가능합니다.");
         return;
       }
 
       const formData = new FormData();
 
-      if (uploadedFile) {
-        formData.append("image", uploadedFile);
-      } else {
-        formData.append("sampleUrl", selectedArtwork.url);
-      }
+      if (uploadedFile) formData.append("image", uploadedFile);
+      else formData.append("sampleUrl", selectedArtwork.url);
 
       formData.append("direction", selectedKeyword);
       formData.append("artworkTitle", selectedArtwork.title);
@@ -438,10 +469,7 @@ export default function Home() {
       });
 
       const data = await safeJson(response);
-
-      if (!response.ok) {
-        throw new Error(data.error || "이미지 생성 실패");
-      }
+      if (!response.ok) throw new Error(data.error || "이미지 생성 실패");
 
       setResultImage(data.image);
       setUsedPrompt(data.usedPrompt || "");
@@ -472,8 +500,6 @@ export default function Home() {
             report: analyzeData.report,
             prompt: data.usedPrompt || "",
           });
-        } else {
-          console.error("ANALYZE_ERROR:", analyzeData);
         }
       } catch (analysisError) {
         console.error("분석/아카이브 저장 실패:", analysisError);
@@ -503,6 +529,14 @@ export default function Home() {
           변한 것은 우리가 살아가는 시대였다.
         </p>
 
+        <AdminPanel
+          isAdmin={isAdmin}
+          adminSecret={adminSecret}
+          setAdminSecret={setAdminSecret}
+          loginAdmin={loginAdmin}
+          logoutAdmin={logoutAdmin}
+        />
+
         <section className="mb-10">
           <button
             onClick={() => {
@@ -521,6 +555,8 @@ export default function Home() {
           <ArchiveSection
             generations={generations}
             loading={loadingArchive}
+            isAdmin={isAdmin}
+            deleteGeneration={deleteGeneration}
             openImageModal={openImageModal}
           />
         )}
@@ -548,9 +584,7 @@ export default function Home() {
                 </div>
 
                 <div className="p-4">
-                  <h3 className="mb-1 text-xl leading-snug">
-                    {artwork.title}
-                  </h3>
+                  <h3 className="mb-1 text-xl leading-snug">{artwork.title}</h3>
                   <p className="text-sm text-neutral-500">{artwork.artist}</p>
                 </div>
               </button>
@@ -569,9 +603,7 @@ export default function Home() {
               className="hidden"
             />
 
-            <p className="mb-2 text-2xl font-semibold">
-              이미지를 업로드해주세요
-            </p>
+            <p className="mb-2 text-2xl font-semibold">이미지를 업로드해주세요</p>
 
             <p className="text-base text-neutral-500">
               직접 선택한 이미지를 현대화 적합도 분석 후 변환합니다.
@@ -701,25 +733,13 @@ export default function Home() {
             <h2 className="mb-6 text-3xl md:text-4xl">작품 분석</h2>
 
             <div className="grid gap-6 md:grid-cols-2">
-              <ReportBlock
-                title="원작 이미지 분석"
-                content={curatorReport.originalAnalysis || ""}
-              />
-              <ReportBlock
-                title="현대화 이미지 분석"
-                content={curatorReport.transformedAnalysis || ""}
-              />
+              <ReportBlock title="원작 이미지 분석" content={curatorReport.originalAnalysis || ""} />
+              <ReportBlock title="현대화 이미지 분석" content={curatorReport.transformedAnalysis || ""} />
             </div>
 
             <div className="mt-6 grid gap-6 md:grid-cols-2">
-              <ReportBlock
-                title="변화 과정 설명"
-                content={curatorReport.transformationRationale || ""}
-              />
-              <ReportBlock
-                title="최종 해석 요약"
-                content={curatorReport.finalSummary || ""}
-              />
+              <ReportBlock title="변화 과정 설명" content={curatorReport.transformationRationale || ""} />
+              <ReportBlock title="최종 해석 요약" content={curatorReport.finalSummary || ""} />
             </div>
 
             <ComparisonTable rows={curatorReport.comparisonTable} />
@@ -734,6 +754,8 @@ export default function Home() {
           reviewComment={reviewComment}
           reviewRating={reviewRating}
           loadingReview={loadingReview}
+          isAdmin={isAdmin}
+          deleteReview={deleteReview}
           setReviewName={setReviewName}
           setReviewComment={setReviewComment}
           setReviewRating={setReviewRating}
@@ -742,23 +764,74 @@ export default function Home() {
       </div>
 
       {modalImage && (
-        <ImageModal
-          image={modalImage}
-          title={modalTitle}
-          onClose={closeImageModal}
-        />
+        <ImageModal image={modalImage} title={modalTitle} onClose={closeImageModal} />
       )}
     </main>
+  );
+}
+
+function AdminPanel({
+  isAdmin,
+  adminSecret,
+  setAdminSecret,
+  loginAdmin,
+  logoutAdmin,
+}: {
+  isAdmin: boolean;
+  adminSecret: string;
+  setAdminSecret: (value: string) => void;
+  loginAdmin: () => void;
+  logoutAdmin: () => void;
+}) {
+  return (
+    <section className="mb-8 rounded-[20px] bg-white/60 p-4">
+      <p className="mb-3 text-xs tracking-[0.3em] text-neutral-500">
+        ADMIN
+      </p>
+
+      {isAdmin ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-lg font-semibold">관리자 모드 ON</p>
+          <button
+            onClick={logoutAdmin}
+            className="rounded-[14px] border-2 border-black bg-white px-5 py-3 text-base font-semibold"
+          >
+            관리자 모드 끄기
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-3">
+          <input
+            type="password"
+            value={adminSecret}
+            onChange={(e) => setAdminSecret(e.target.value)}
+            placeholder="관리자 비밀번호"
+            className="min-w-[240px] rounded-[14px] border-2 border-black px-5 py-3 text-base"
+          />
+
+          <button
+            onClick={loginAdmin}
+            className="rounded-[14px] bg-black px-5 py-3 text-base font-semibold text-white"
+          >
+            관리자 로그인
+          </button>
+        </div>
+      )}
+    </section>
   );
 }
 
 function ArchiveSection({
   generations,
   loading,
+  isAdmin,
+  deleteGeneration,
   openImageModal,
 }: {
   generations: Generation[];
   loading: boolean;
+  isAdmin: boolean;
+  deleteGeneration: (id: string) => void;
   openImageModal: (image: string, title: string) => void;
 }) {
   return (
@@ -770,18 +843,13 @@ function ArchiveSection({
       <h2 className="mb-4 text-3xl md:text-5xl">다른 사용자의 변환 전시</h2>
 
       <p className="mb-8 max-w-4xl text-base leading-7 text-white/60 md:text-lg">
-        사용자들이 생성한 현대화 명작 결과가 자동으로 저장되는 전시
-        아카이브입니다.
+        사용자들이 생성한 현대화 명작 결과가 자동으로 저장되는 전시 아카이브입니다.
       </p>
 
-      {loading && (
-        <p className="text-xl text-white/60">아카이브를 불러오는 중...</p>
-      )}
+      {loading && <p className="text-xl text-white/60">아카이브를 불러오는 중...</p>}
 
       {!loading && generations.length === 0 && (
-        <p className="text-xl text-white/60">
-          아직 저장된 전시 결과가 없습니다.
-        </p>
+        <p className="text-xl text-white/60">아직 저장된 전시 결과가 없습니다.</p>
       )}
 
       <div className="grid gap-5 md:grid-cols-2">
@@ -803,9 +871,7 @@ function ArchiveSection({
 
             <div className="grid gap-3 md:grid-cols-2">
               <button
-                onClick={() =>
-                  openImageModal(item.original_image, "아카이브 원작")
-                }
+                onClick={() => openImageModal(item.original_image, "아카이브 원작")}
                 className="aspect-square overflow-hidden bg-neutral-100"
               >
                 <img
@@ -816,9 +882,7 @@ function ArchiveSection({
               </button>
 
               <button
-                onClick={() =>
-                  openImageModal(item.generated_image, "아카이브 현대화 결과")
-                }
+                onClick={() => openImageModal(item.generated_image, "아카이브 현대화 결과")}
                 className="aspect-square overflow-hidden bg-neutral-100"
               >
                 <img
@@ -839,6 +903,15 @@ function ArchiveSection({
                   "분석 내용이 없습니다."}
               </p>
             </div>
+
+            {isAdmin && (
+              <button
+                onClick={() => deleteGeneration(item.id)}
+                className="mt-5 w-full rounded-[16px] bg-red-600 px-5 py-3 text-lg font-semibold text-white"
+              >
+                이 전시 작품 삭제
+              </button>
+            )}
           </div>
         ))}
       </div>
@@ -863,16 +936,8 @@ function ArtworkPanel({
 
       <div className="aspect-square overflow-hidden rounded-[20px] bg-neutral-100">
         {image ? (
-          <button
-            onClick={onImageClick}
-            className="h-full w-full cursor-zoom-in overflow-hidden"
-            type="button"
-          >
-            <img
-              src={image}
-              alt={title}
-              className="h-full w-full object-cover transition duration-500 hover:scale-105"
-            />
+          <button onClick={onImageClick} className="h-full w-full cursor-zoom-in overflow-hidden" type="button">
+            <img src={image} alt={title} className="h-full w-full object-cover transition duration-500 hover:scale-105" />
           </button>
         ) : isGenerating ? (
           <div className="flex h-full w-full flex-col items-center justify-center text-xl text-neutral-500">
@@ -889,24 +954,10 @@ function ArtworkPanel({
   );
 }
 
-function ImageModal({
-  image,
-  title,
-  onClose,
-}: {
-  image: string;
-  title: string;
-  onClose: () => void;
-}) {
+function ImageModal({ image, title, onClose }: { image: string; title: string; onClose: () => void }) {
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-6"
-      onClick={onClose}
-    >
-      <div
-        className="relative max-h-full max-w-5xl"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-6" onClick={onClose}>
+      <div className="relative max-h-full max-w-5xl" onClick={(e) => e.stopPropagation()}>
         <button
           onClick={onClose}
           className="absolute right-0 top-[-54px] rounded-full border border-white/30 px-5 py-2 text-lg text-white transition hover:bg-white hover:text-black"
@@ -916,11 +967,7 @@ function ImageModal({
 
         <p className="mb-3 text-xl text-white">{title}</p>
 
-        <img
-          src={image}
-          alt={title}
-          className="max-h-[80vh] max-w-full rounded-[20px] object-contain shadow-2xl"
-        />
+        <img src={image} alt={title} className="max-h-[80vh] max-w-full rounded-[20px] object-contain shadow-2xl" />
       </div>
     </div>
   );
@@ -943,9 +990,7 @@ function ComparisonTable({ rows }: { rows?: ComparisonRow[] }) {
   return (
     <div className="mt-10 overflow-hidden rounded-[20px] border border-neutral-200">
       <div className="bg-black px-6 py-5 text-white">
-        <p className="text-xs tracking-[0.3em] text-white/50">
-          STRUCTURAL COMPARISON
-        </p>
+        <p className="text-xs tracking-[0.3em] text-white/50">STRUCTURAL COMPARISON</p>
         <h3 className="mt-2 text-3xl">변환 근거 비교표</h3>
       </div>
 
@@ -953,10 +998,7 @@ function ComparisonTable({ rows }: { rows?: ComparisonRow[] }) {
         {rows.map((row, index) => (
           <div key={index} className="grid gap-0 md:grid-cols-5">
             <TableCell label="원작 요소" content={row.originalElement || ""} />
-            <TableCell
-              label="현대화 요소"
-              content={row.modernizedElement || ""}
-            />
+            <TableCell label="현대화 요소" content={row.modernizedElement || ""} />
             <TableCell label="변환 이유" content={row.reason || ""} />
             <TableCell label="감정 변화" content={row.emotionalShift || ""} />
             <TableCell label="윤리적 고려" content={row.ethicalNote || ""} />
@@ -983,9 +1025,7 @@ function PromptPanel({ prompt }: { prompt: string }) {
         PROMPT DESIGN DOCUMENTATION
       </p>
 
-      <h2 className="mb-5 text-3xl md:text-4xl">
-        AI에게 전달된 창작 지시문
-      </h2>
+      <h2 className="mb-5 text-3xl md:text-4xl">AI에게 전달된 창작 지시문</h2>
 
       <p className="mb-5 max-w-4xl text-base leading-7 text-white/60 md:text-lg">
         이미지가 어떤 프롬프트 설계를 통해 생성되었는지 보여줍니다.
@@ -1004,6 +1044,8 @@ function ReviewSection({
   reviewComment,
   reviewRating,
   loadingReview,
+  isAdmin,
+  deleteReview,
   setReviewName,
   setReviewComment,
   setReviewRating,
@@ -1014,6 +1056,8 @@ function ReviewSection({
   reviewComment: string;
   reviewRating: number;
   loadingReview: boolean;
+  isAdmin: boolean;
+  deleteReview: (id: string) => void;
   setReviewName: (value: string) => void;
   setReviewComment: (value: string) => void;
   setReviewRating: (value: number) => void;
@@ -1021,10 +1065,7 @@ function ReviewSection({
 }) {
   const average =
     reviews.length > 0
-      ? (
-          reviews.reduce((sum, review) => sum + review.rating, 0) /
-          reviews.length
-        ).toFixed(1)
+      ? (reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length).toFixed(1)
       : "0.0";
 
   return (
@@ -1053,9 +1094,7 @@ function ReviewSection({
               key={star}
               onClick={() => setReviewRating(star)}
               className={`rounded-[14px] border-2 border-black px-5 py-3 text-xl ${
-                reviewRating >= star
-                  ? "bg-black text-white"
-                  : "bg-white text-black"
+                reviewRating >= star ? "bg-black text-white" : "bg-white text-black"
               }`}
             >
               ★
@@ -1081,10 +1120,7 @@ function ReviewSection({
 
       <div className="grid gap-4 md:grid-cols-2">
         {reviews.map((review) => (
-          <div
-            key={review.id}
-            className="rounded-[20px] border-2 border-neutral-200 p-5"
-          >
+          <div key={review.id} className="rounded-[20px] border-2 border-neutral-200 p-5">
             <div className="mb-3 flex items-center justify-between gap-3">
               <p className="text-xl font-semibold">{review.name || "익명"}</p>
               <p className="text-xl">{"★".repeat(review.rating)}</p>
@@ -1097,6 +1133,15 @@ function ReviewSection({
             <p className="mt-4 text-xs text-neutral-400">
               {new Date(review.created_at).toLocaleString("ko-KR")}
             </p>
+
+            {isAdmin && (
+              <button
+                onClick={() => deleteReview(review.id)}
+                className="mt-4 w-full rounded-[14px] bg-red-600 px-5 py-3 text-base font-semibold text-white"
+              >
+                이 후기 삭제
+              </button>
+            )}
           </div>
         ))}
       </div>
