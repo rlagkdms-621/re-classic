@@ -106,10 +106,10 @@ export default function Home() {
   async function loadReviews() {
     try {
       const response = await fetch("/api/reviews");
-      const data = await response.json();
+      const data = await safeJson(response);
       if (response.ok) setReviews(data.reviews || []);
     } catch (error) {
-      console.error(error);
+      console.error("REVIEWS_LOAD_ERROR:", error);
     }
   }
 
@@ -117,10 +117,10 @@ export default function Home() {
     setLoadingArchive(true);
     try {
       const response = await fetch("/api/generations");
-      const data = await response.json();
+      const data = await safeJson(response);
       if (response.ok) setGenerations(data.generations || []);
     } catch (error) {
-      console.error(error);
+      console.error("GENERATIONS_LOAD_ERROR:", error);
     } finally {
       setLoadingArchive(false);
     }
@@ -141,7 +141,7 @@ export default function Home() {
         body: JSON.stringify({ rating: reviewRating, name: reviewName, comment: reviewComment }),
       });
 
-      const data = await response.json();
+      const data = await safeJson(response);
       if (!response.ok) throw new Error(data.error || "후기 저장 실패");
 
       setReviewName("");
@@ -178,7 +178,7 @@ export default function Home() {
         }),
       });
 
-      const data = await response.json();
+      const data = await safeJson(response);
 
       if (!response.ok) {
         console.error("ARCHIVE_SAVE_ERROR:", data);
@@ -210,6 +210,43 @@ export default function Home() {
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
+  }
+
+  async function compressDataUrl(dataUrl: string, maxSize = 520, quality = 0.65) {
+    return await new Promise<string>((resolve, reject) => {
+      const img = new Image();
+
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+
+        const ctx = canvas.getContext("2d");
+
+        if (!ctx) {
+          reject(new Error("이미지 압축 실패"));
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+
+      img.onerror = () => reject(new Error("이미지를 압축할 수 없습니다."));
+      img.src = dataUrl;
+    });
+  }
+
+  async function safeJson(response: Response) {
+    const text = await response.text();
+
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error(text || "서버 응답 오류");
+    }
   }
 
   async function getAnalyzableImage() {
@@ -300,7 +337,7 @@ export default function Home() {
       }),
     });
 
-    const data = await response.json();
+    const data = await safeJson(response);
     if (!response.ok) throw new Error(data.error || "적합도 분석 실패");
 
     setSuitabilityResult(data.suitability);
@@ -321,16 +358,24 @@ export default function Home() {
 
     try {
       const originalImage = await getAnalyzableImage();
-      const suitability = await runSuitabilityCheck(originalImage);
+      const compressedOriginalImage = await compressDataUrl(originalImage);
 
-      if (suitability.status === "변환 어려움" || suitability.canGenerate === false) {
+      const suitability = await runSuitabilityCheck(compressedOriginalImage);
+
+      if (
+        suitability.status === "변환 어려움" ||
+        suitability.canGenerate === false
+      ) {
         return;
       }
 
       const formData = new FormData();
 
-      if (uploadedFile) formData.append("image", uploadedFile);
-      else formData.append("sampleUrl", selectedArtwork.url);
+      if (uploadedFile) {
+        formData.append("image", uploadedFile);
+      } else {
+        formData.append("sampleUrl", selectedArtwork.url);
+      }
 
       formData.append("direction", selectedKeyword);
       formData.append("artworkTitle", selectedArtwork.title);
@@ -340,35 +385,47 @@ export default function Home() {
         body: formData,
       });
 
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "이미지 생성 실패");
+      const data = await safeJson(response);
+
+      if (!response.ok) {
+        throw new Error(data.error || "이미지 생성 실패");
+      }
 
       setResultImage(data.image);
       setUsedPrompt(data.usedPrompt || "");
 
-      const analyzeResponse = await fetch("/api/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          originalImage,
-          generatedImage: data.image,
-          direction: selectedKeyword,
-          artworkTitle: selectedArtwork.title,
-        }),
-      });
+      const compressedGeneratedImage = await compressDataUrl(data.image);
 
-      const analyzeData = await analyzeResponse.json();
-      if (!analyzeResponse.ok) throw new Error(analyzeData.error || "큐레이터 분석 실패");
+      try {
+        const analyzeResponse = await fetch("/api/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            originalImage: compressedOriginalImage,
+            generatedImage: compressedGeneratedImage,
+            direction: selectedKeyword,
+            artworkTitle: selectedArtwork.title,
+          }),
+        });
 
-      setCuratorReport(analyzeData.report);
+        const analyzeData = await safeJson(analyzeResponse);
 
-      await saveGenerationArchive({
-        originalImage,
-        generatedImage: data.image,
-        suitability,
-        report: analyzeData.report,
-        prompt: data.usedPrompt || "",
-      });
+        if (analyzeResponse.ok) {
+          setCuratorReport(analyzeData.report);
+
+          await saveGenerationArchive({
+            originalImage: compressedOriginalImage,
+            generatedImage: compressedGeneratedImage,
+            suitability,
+            report: analyzeData.report,
+            prompt: data.usedPrompt || "",
+          });
+        } else {
+          console.error("ANALYZE_ERROR:", analyzeData);
+        }
+      } catch (analysisError) {
+        console.error("분석/아카이브 저장 실패:", analysisError);
+      }
     } catch (error: any) {
       alert(error.message || "생성 중 오류가 발생했습니다.");
     } finally {
