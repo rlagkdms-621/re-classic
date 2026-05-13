@@ -14,7 +14,11 @@ const sampleArtworks = [
     artist: "Jean-François Millet",
     url: "/samples/3.jpg",
   },
-  { title: "별이 빛나는 밤", artist: "Vincent van Gogh", url: "/samples/4.jpg" },
+  {
+    title: "별이 빛나는 밤",
+    artist: "Vincent van Gogh",
+    url: "/samples/4.jpg",
+  },
   { title: "아메리칸 고딕", artist: "Grant Wood", url: "/samples/5.jpg" },
   { title: "아테네 학당", artist: "Raphael", url: "/samples/6.jpg" },
 ];
@@ -103,6 +107,16 @@ export default function Home() {
     loadGenerations();
   }, []);
 
+  async function safeJson(response: Response) {
+    const text = await response.text();
+
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error(text || "서버 응답 오류");
+    }
+  }
+
   async function loadReviews() {
     try {
       const response = await fetch("/api/reviews");
@@ -115,6 +129,7 @@ export default function Home() {
 
   async function loadGenerations() {
     setLoadingArchive(true);
+
     try {
       const response = await fetch("/api/generations");
       const data = await safeJson(response);
@@ -138,11 +153,18 @@ export default function Home() {
       const response = await fetch("/api/reviews", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rating: reviewRating, name: reviewName, comment: reviewComment }),
+        body: JSON.stringify({
+          rating: reviewRating,
+          name: reviewName,
+          comment: reviewComment,
+        }),
       });
 
       const data = await safeJson(response);
-      if (!response.ok) throw new Error(data.error || "후기 저장 실패");
+
+      if (!response.ok) {
+        throw new Error(data.error || "후기 저장 실패");
+      }
 
       setReviewName("");
       setReviewComment("");
@@ -239,16 +261,6 @@ export default function Home() {
     });
   }
 
-  async function safeJson(response: Response) {
-    const text = await response.text();
-
-    try {
-      return JSON.parse(text);
-    } catch {
-      throw new Error(text || "서버 응답 오류");
-    }
-  }
-
   async function getAnalyzableImage() {
     if (uploadedFile) return await fileToDataUrl(uploadedFile);
     if (selectedArtwork?.url) return await imageUrlToDataUrl(selectedArtwork.url);
@@ -322,7 +334,9 @@ export default function Home() {
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error(error);
-      alert("이미지 저장이 어려운 브라우저입니다. 이미지를 크게 연 뒤 길게 눌러 저장해주세요.");
+      alert(
+        "이미지 저장이 어려운 브라우저입니다. 이미지를 크게 연 뒤 길게 눌러 저장해주세요."
+      );
     }
   }
 
@@ -338,10 +352,32 @@ export default function Home() {
     });
 
     const data = await safeJson(response);
-    if (!response.ok) throw new Error(data.error || "적합도 분석 실패");
 
-    setSuitabilityResult(data.suitability);
-    return data.suitability as SuitabilityResult;
+    if (!response.ok) {
+      throw new Error(data.error || "적합도 분석 실패");
+    }
+
+    const suitability = data.suitability as SuitabilityResult;
+    const status = String(suitability.status || "").replace(/\s/g, "");
+
+    const blocked =
+      suitability.canGenerate === false ||
+      (status.includes("어려움") && !status.includes("조금"));
+
+    if (blocked) {
+      const blockedResult: SuitabilityResult = {
+        ...suitability,
+        status: "변환 어려움",
+        canGenerate: false,
+        message: "이미지 변환이 불가능합니다.",
+      };
+
+      setSuitabilityResult(blockedResult);
+      return blockedResult;
+    }
+
+    setSuitabilityResult(suitability);
+    return suitability;
   }
 
   async function handleGenerate() {
@@ -362,10 +398,26 @@ export default function Home() {
 
       const suitability = await runSuitabilityCheck(compressedOriginalImage);
 
-      if (
-        suitability.status === "변환 어려움" ||
-        suitability.canGenerate === false
-      ) {
+      const normalizedStatus = String(suitability.status || "").replace(/\s/g, "");
+
+      const isBlocked =
+        suitability.canGenerate === false ||
+        (normalizedStatus.includes("어려움") &&
+          !normalizedStatus.includes("조금"));
+
+      if (isBlocked) {
+        setSuitabilityResult({
+          ...suitability,
+          status: "변환 어려움",
+          canGenerate: false,
+          message: "이미지 변환이 불가능합니다.",
+        });
+
+        setResultImage("");
+        setUsedPrompt("");
+        setCuratorReport(null);
+
+        alert("이미지 변환이 불가능합니다.");
         return;
       }
 
@@ -459,7 +511,9 @@ export default function Home() {
             }}
             className="w-full rounded-[20px] border-2 border-black bg-black px-6 py-5 text-xl font-semibold text-white transition hover:scale-[1.01] md:text-2xl"
           >
-            {showArchive ? "전시 아카이브 닫기" : "다른 사용자의 변환 이미지 구경하기"}
+            {showArchive
+              ? "전시 아카이브 닫기"
+              : "다른 사용자의 변환 이미지 구경하기"}
           </button>
         </section>
 
@@ -508,7 +562,12 @@ export default function Home() {
           <h2 className="mb-5 text-3xl md:text-4xl">직접 업로드</h2>
 
           <label className="block cursor-pointer rounded-[22px] border-2 border-dashed border-neutral-500 bg-white/60 p-7 text-center transition hover:border-black hover:bg-white">
-            <input type="file" accept="image/*" onChange={handleUpload} className="hidden" />
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleUpload}
+              className="hidden"
+            />
 
             <p className="mb-2 text-2xl font-semibold">
               이미지를 업로드해주세요
@@ -596,7 +655,9 @@ export default function Home() {
               PRE-CHECK REPORT
             </p>
 
-            <h2 className="mb-6 text-3xl md:text-4xl">현대화 사전 적합도 분석</h2>
+            <h2 className="mb-6 text-3xl md:text-4xl">
+              현대화 사전 적합도 분석
+            </h2>
 
             <div
               className={`mb-6 rounded-[20px] border-2 p-5 ${
@@ -607,18 +668,26 @@ export default function Home() {
                   : "border-red-700 bg-red-50"
               }`}
             >
-              <p className="mb-2 text-3xl font-bold">{suitabilityResult.status}</p>
+              <p className="mb-2 text-3xl font-bold">
+                {suitabilityResult.status}
+              </p>
 
               {suitabilityResult.status === "변환 어려움" && (
                 <p className="text-2xl font-semibold text-red-700">
-                  이미지 생성이 불가능합니다.
+                  이미지 변환이 불가능합니다.
                 </p>
               )}
             </div>
 
             <div className="grid gap-6 md:grid-cols-2">
-              <ReportBlock title="판정 이유" content={suitabilityResult.reason || ""} />
-              <ReportBlock title="변환 한계" content={suitabilityResult.limitation || ""} />
+              <ReportBlock
+                title="판정 이유"
+                content={suitabilityResult.reason || ""}
+              />
+              <ReportBlock
+                title="변환 한계"
+                content={suitabilityResult.limitation || ""}
+              />
             </div>
           </section>
         )}
@@ -632,13 +701,25 @@ export default function Home() {
             <h2 className="mb-6 text-3xl md:text-4xl">작품 분석</h2>
 
             <div className="grid gap-6 md:grid-cols-2">
-              <ReportBlock title="원작 이미지 분석" content={curatorReport.originalAnalysis || ""} />
-              <ReportBlock title="현대화 이미지 분석" content={curatorReport.transformedAnalysis || ""} />
+              <ReportBlock
+                title="원작 이미지 분석"
+                content={curatorReport.originalAnalysis || ""}
+              />
+              <ReportBlock
+                title="현대화 이미지 분석"
+                content={curatorReport.transformedAnalysis || ""}
+              />
             </div>
 
             <div className="mt-6 grid gap-6 md:grid-cols-2">
-              <ReportBlock title="변화 과정 설명" content={curatorReport.transformationRationale || ""} />
-              <ReportBlock title="최종 해석 요약" content={curatorReport.finalSummary || ""} />
+              <ReportBlock
+                title="변화 과정 설명"
+                content={curatorReport.transformationRationale || ""}
+              />
+              <ReportBlock
+                title="최종 해석 요약"
+                content={curatorReport.finalSummary || ""}
+              />
             </div>
 
             <ComparisonTable rows={curatorReport.comparisonTable} />
@@ -661,7 +742,11 @@ export default function Home() {
       </div>
 
       {modalImage && (
-        <ImageModal image={modalImage} title={modalTitle} onClose={closeImageModal} />
+        <ImageModal
+          image={modalImage}
+          title={modalTitle}
+          onClose={closeImageModal}
+        />
       )}
     </main>
   );
@@ -685,13 +770,18 @@ function ArchiveSection({
       <h2 className="mb-4 text-3xl md:text-5xl">다른 사용자의 변환 전시</h2>
 
       <p className="mb-8 max-w-4xl text-base leading-7 text-white/60 md:text-lg">
-        사용자들이 생성한 현대화 명작 결과가 자동으로 저장되는 전시 아카이브입니다.
+        사용자들이 생성한 현대화 명작 결과가 자동으로 저장되는 전시
+        아카이브입니다.
       </p>
 
-      {loading && <p className="text-xl text-white/60">아카이브를 불러오는 중...</p>}
+      {loading && (
+        <p className="text-xl text-white/60">아카이브를 불러오는 중...</p>
+      )}
 
       {!loading && generations.length === 0 && (
-        <p className="text-xl text-white/60">아직 저장된 전시 결과가 없습니다.</p>
+        <p className="text-xl text-white/60">
+          아직 저장된 전시 결과가 없습니다.
+        </p>
       )}
 
       <div className="grid gap-5 md:grid-cols-2">
@@ -713,17 +803,29 @@ function ArchiveSection({
 
             <div className="grid gap-3 md:grid-cols-2">
               <button
-                onClick={() => openImageModal(item.original_image, "아카이브 원작")}
+                onClick={() =>
+                  openImageModal(item.original_image, "아카이브 원작")
+                }
                 className="aspect-square overflow-hidden bg-neutral-100"
               >
-                <img src={item.original_image} alt="archive original" className="h-full w-full object-cover transition hover:scale-105" />
+                <img
+                  src={item.original_image}
+                  alt="archive original"
+                  className="h-full w-full object-cover transition hover:scale-105"
+                />
               </button>
 
               <button
-                onClick={() => openImageModal(item.generated_image, "아카이브 현대화 결과")}
+                onClick={() =>
+                  openImageModal(item.generated_image, "아카이브 현대화 결과")
+                }
                 className="aspect-square overflow-hidden bg-neutral-100"
               >
-                <img src={item.generated_image} alt="archive generated" className="h-full w-full object-cover transition hover:scale-105" />
+                <img
+                  src={item.generated_image}
+                  alt="archive generated"
+                  className="h-full w-full object-cover transition hover:scale-105"
+                />
               </button>
             </div>
 
@@ -761,8 +863,16 @@ function ArtworkPanel({
 
       <div className="aspect-square overflow-hidden rounded-[20px] bg-neutral-100">
         {image ? (
-          <button onClick={onImageClick} className="h-full w-full cursor-zoom-in overflow-hidden" type="button">
-            <img src={image} alt={title} className="h-full w-full object-cover transition duration-500 hover:scale-105" />
+          <button
+            onClick={onImageClick}
+            className="h-full w-full cursor-zoom-in overflow-hidden"
+            type="button"
+          >
+            <img
+              src={image}
+              alt={title}
+              className="h-full w-full object-cover transition duration-500 hover:scale-105"
+            />
           </button>
         ) : isGenerating ? (
           <div className="flex h-full w-full flex-col items-center justify-center text-xl text-neutral-500">
@@ -779,10 +889,24 @@ function ArtworkPanel({
   );
 }
 
-function ImageModal({ image, title, onClose }: { image: string; title: string; onClose: () => void }) {
+function ImageModal({
+  image,
+  title,
+  onClose,
+}: {
+  image: string;
+  title: string;
+  onClose: () => void;
+}) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-6" onClick={onClose}>
-      <div className="relative max-h-full max-w-5xl" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-6"
+      onClick={onClose}
+    >
+      <div
+        className="relative max-h-full max-w-5xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         <button
           onClick={onClose}
           className="absolute right-0 top-[-54px] rounded-full border border-white/30 px-5 py-2 text-lg text-white transition hover:bg-white hover:text-black"
@@ -792,7 +916,11 @@ function ImageModal({ image, title, onClose }: { image: string; title: string; o
 
         <p className="mb-3 text-xl text-white">{title}</p>
 
-        <img src={image} alt={title} className="max-h-[80vh] max-w-full rounded-[20px] object-contain shadow-2xl" />
+        <img
+          src={image}
+          alt={title}
+          className="max-h-[80vh] max-w-full rounded-[20px] object-contain shadow-2xl"
+        />
       </div>
     </div>
   );
@@ -825,7 +953,10 @@ function ComparisonTable({ rows }: { rows?: ComparisonRow[] }) {
         {rows.map((row, index) => (
           <div key={index} className="grid gap-0 md:grid-cols-5">
             <TableCell label="원작 요소" content={row.originalElement || ""} />
-            <TableCell label="현대화 요소" content={row.modernizedElement || ""} />
+            <TableCell
+              label="현대화 요소"
+              content={row.modernizedElement || ""}
+            />
             <TableCell label="변환 이유" content={row.reason || ""} />
             <TableCell label="감정 변화" content={row.emotionalShift || ""} />
             <TableCell label="윤리적 고려" content={row.ethicalNote || ""} />
@@ -852,7 +983,9 @@ function PromptPanel({ prompt }: { prompt: string }) {
         PROMPT DESIGN DOCUMENTATION
       </p>
 
-      <h2 className="mb-5 text-3xl md:text-4xl">AI에게 전달된 창작 지시문</h2>
+      <h2 className="mb-5 text-3xl md:text-4xl">
+        AI에게 전달된 창작 지시문
+      </h2>
 
       <p className="mb-5 max-w-4xl text-base leading-7 text-white/60 md:text-lg">
         이미지가 어떤 프롬프트 설계를 통해 생성되었는지 보여줍니다.
@@ -888,7 +1021,10 @@ function ReviewSection({
 }) {
   const average =
     reviews.length > 0
-      ? (reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length).toFixed(1)
+      ? (
+          reviews.reduce((sum, review) => sum + review.rating, 0) /
+          reviews.length
+        ).toFixed(1)
       : "0.0";
 
   return (
@@ -917,7 +1053,9 @@ function ReviewSection({
               key={star}
               onClick={() => setReviewRating(star)}
               className={`rounded-[14px] border-2 border-black px-5 py-3 text-xl ${
-                reviewRating >= star ? "bg-black text-white" : "bg-white text-black"
+                reviewRating >= star
+                  ? "bg-black text-white"
+                  : "bg-white text-black"
               }`}
             >
               ★
@@ -943,7 +1081,10 @@ function ReviewSection({
 
       <div className="grid gap-4 md:grid-cols-2">
         {reviews.map((review) => (
-          <div key={review.id} className="rounded-[20px] border-2 border-neutral-200 p-5">
+          <div
+            key={review.id}
+            className="rounded-[20px] border-2 border-neutral-200 p-5"
+          >
             <div className="mb-3 flex items-center justify-between gap-3">
               <p className="text-xl font-semibold">{review.name || "익명"}</p>
               <p className="text-xl">{"★".repeat(review.rating)}</p>
