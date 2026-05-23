@@ -4,14 +4,22 @@ import { useEffect, useState } from "react";
 
 const sampleArtworks = [
   { title: "절규", artist: "Edvard Munch", url: "/samples/1.jpg" },
-  { title: "그랑드 자트 섬의 일요일 오후", artist: "Georges Seurat", url: "/samples/2.jpg" },
-  { title: "이삭 줍는 사람들", artist: "Jean-François Millet", url: "/samples/3.jpg" },
+  {
+    title: "그랑드 자트 섬의 일요일 오후",
+    artist: "Georges Seurat",
+    url: "/samples/2.jpg",
+  },
+  {
+    title: "이삭 줍는 사람들",
+    artist: "Jean-François Millet",
+    url: "/samples/3.jpg",
+  },
   { title: "별이 빛나는 밤", artist: "Vincent van Gogh", url: "/samples/4.jpg" },
   { title: "아메리칸 고딕", artist: "Grant Wood", url: "/samples/5.jpg" },
   { title: "아테네 학당", artist: "Raphael", url: "/samples/6.jpg" },
 ];
 
-const keywords = ["SNS 시대", "도시적 고립", "환경 위기"];
+const keywords = ["사회적 고립", "환경 위기"];
 
 type Artwork = { title: string; artist: string; url: string };
 
@@ -63,14 +71,16 @@ type Generation = {
 export default function Home() {
   const [selectedArtwork, setSelectedArtwork] = useState<Artwork | null>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [selectedKeyword, setSelectedKeyword] = useState("SNS 시대");
+  const [selectedKeyword, setSelectedKeyword] = useState("사회적 고립");
 
   const [resultImage, setResultImage] = useState("");
   const [usedPrompt, setUsedPrompt] = useState("");
-  const [suitabilityResult, setSuitabilityResult] = useState<SuitabilityResult | null>(null);
+  const [suitabilityResult, setSuitabilityResult] =
+    useState<SuitabilityResult | null>(null);
   const [curatorReport, setCuratorReport] = useState<CuratorReport | null>(null);
 
   const [loadingGenerate, setLoadingGenerate] = useState(false);
+
   const [modalImage, setModalImage] = useState<string | null>(null);
   const [modalTitle, setModalTitle] = useState("");
 
@@ -100,6 +110,7 @@ export default function Home() {
 
   async function safeJson(response: Response) {
     const text = await response.text();
+
     try {
       return JSON.parse(text);
     } catch {
@@ -139,7 +150,10 @@ export default function Home() {
       });
 
       const data = await safeJson(response);
-      if (!response.ok) throw new Error(data.error || "후기 삭제 실패");
+
+      if (!response.ok) {
+        throw new Error(data.error || "후기 삭제 실패");
+      }
 
       await loadReviews();
     } catch (error: any) {
@@ -161,7 +175,10 @@ export default function Home() {
       });
 
       const data = await safeJson(response);
-      if (!response.ok) throw new Error(data.error || "전시 작품 삭제 실패");
+
+      if (!response.ok) {
+        throw new Error(data.error || "전시 작품 삭제 실패");
+      }
 
       await loadGenerations();
     } catch (error: any) {
@@ -173,7 +190,10 @@ export default function Home() {
     try {
       const response = await fetch("/api/reviews");
       const data = await safeJson(response);
-      if (response.ok) setReviews(data.reviews || []);
+
+      if (response.ok) {
+        setReviews(data.reviews || []);
+      }
     } catch (error) {
       console.error("REVIEWS_LOAD_ERROR:", error);
     }
@@ -181,10 +201,14 @@ export default function Home() {
 
   async function loadGenerations() {
     setLoadingArchive(true);
+
     try {
       const response = await fetch("/api/generations");
       const data = await safeJson(response);
-      if (response.ok) setGenerations(data.generations || []);
+
+      if (response.ok) {
+        setGenerations(data.generations || []);
+      }
     } catch (error) {
       console.error("GENERATIONS_LOAD_ERROR:", error);
     } finally {
@@ -208,7 +232,10 @@ export default function Home() {
       });
 
       const data = await safeJson(response);
-      if (!response.ok) throw new Error(data.error || "후기 저장 실패");
+
+      if (!response.ok) {
+        throw new Error(data.error || "후기 저장 실패");
+      }
 
       setReviewName("");
       setReviewComment("");
@@ -245,6 +272,7 @@ export default function Home() {
       });
 
       const data = await safeJson(response);
+
       if (!response.ok) {
         console.error("ARCHIVE_SAVE_ERROR:", data);
         return;
@@ -289,6 +317,7 @@ export default function Home() {
         canvas.height = Math.round(img.height * scale);
 
         const ctx = canvas.getContext("2d");
+
         if (!ctx) {
           reject(new Error("이미지 압축 실패"));
           return;
@@ -392,7 +421,10 @@ export default function Home() {
     });
 
     const data = await safeJson(response);
-    if (!response.ok) throw new Error(data.error || "적합도 분석 실패");
+
+    if (!response.ok) {
+      throw new Error(data.error || "적합도 분석 실패");
+    }
 
     const suitability = data.suitability as SuitabilityResult;
     const status = String(suitability.status || "").replace(/\s/g, "");
@@ -438,7 +470,8 @@ export default function Home() {
 
       const isBlocked =
         suitability.canGenerate === false ||
-        (normalizedStatus.includes("어려움") && !normalizedStatus.includes("조금"));
+        (normalizedStatus.includes("어려움") &&
+          !normalizedStatus.includes("조금"));
 
       if (isBlocked) {
         setSuitabilityResult({
@@ -457,8 +490,11 @@ export default function Home() {
 
       const formData = new FormData();
 
-      if (uploadedFile) formData.append("image", uploadedFile);
-      else formData.append("sampleUrl", selectedArtwork.url);
+      if (uploadedFile) {
+        formData.append("image", uploadedFile);
+      } else {
+        formData.append("sampleUrl", selectedArtwork.url);
+      }
 
       formData.append("direction", selectedKeyword);
       formData.append("artworkTitle", selectedArtwork.title);
@@ -469,7 +505,10 @@ export default function Home() {
       });
 
       const data = await safeJson(response);
-      if (!response.ok) throw new Error(data.error || "이미지 생성 실패");
+
+      if (!response.ok) {
+        throw new Error(data.error || "이미지 생성 실패");
+      }
 
       setResultImage(data.image);
       setUsedPrompt(data.usedPrompt || "");
@@ -620,7 +659,7 @@ export default function Home() {
         <section className="mb-12">
           <h2 className="mb-5 text-3xl md:text-4xl">현대화 방향</h2>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {keywords.map((keyword) => (
               <button
                 key={keyword}

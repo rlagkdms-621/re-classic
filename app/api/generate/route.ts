@@ -8,50 +8,33 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-const themePrompts: Record<string, string> = {
-  "SNS 시대": `
-Theme: SNS era.
+const prompts: Record<string, string> = {
+  "사회적 고립": `
+Transform the classical painting into a haunting reinterpretation of social isolation.
 
-Add only minimal modern symbolic elements:
-- one or two smartphones
-- subtle screen glow
-- small painted notification symbols
-- a feeling of being watched or recorded
-- social comparison, anxiety, and performance pressure
+Modern intervention:
+Add emotional distance, lonely figures, separated groups, cold public spaces, silent crowds, glass barriers, isolated rooms, distant windows, and subtle signs of disconnection.
 
-Do not fill the entire painting with digital UI.
-Do not turn the image into a modern poster.
-The SNS elements must be small, symbolic, and painted into the original world.
-`,
+Emotional direction:
+The image should feel socially disconnected, silent, cold, lonely, and psychologically isolated.
 
-  "도시적 고립": `
-Theme: urban isolation.
-
-Add only minimal modern symbolic elements:
-- distant apartment windows
-- cold city light
-- subtle glass reflections
-- isolated figures or anonymous urban atmosphere
-- emotional distance between people and space
-
-Do not replace the whole background with a modern city.
-Do not over-modernize the scene.
-The urban elements must quietly invade the original painting while preserving the original atmosphere.
+Style preservation:
+Every added element must be physically painted in the original painter's exact style.
+Figures, spaces, lights, and crowds must share the same brushstroke rhythm, paint texture, and pigment behavior as the original artwork.
 `,
 
   "환경 위기": `
-Theme: environmental crisis.
+Transform the classical painting into a devastating reinterpretation of environmental crisis.
 
-Add only minimal modern symbolic elements:
-- polluted air or water
-- small traces of plastic waste
-- dying plants
-- toxic sky tone
-- subtle signs of climate damage
+Modern intervention:
+Add polluted water, plastic waste, industrial smoke, dying plants, toxic sky, flooding, dry soil, climate collapse, and ecological decay.
 
-Do not turn the painting into a disaster movie.
-Do not destroy the whole original composition.
-The environmental crisis must feel like it is slowly contaminating the original painting.
+Emotional direction:
+The original beauty should feel fragile, contaminated, tragic, and slowly collapsing.
+
+Style preservation:
+Every environmental crisis element must be physically painted in the original painter's exact style.
+Pollution, smoke, water, plastic, and damaged nature must look like they belong inside the original painting, not like modern objects placed on top.
 `,
 };
 
@@ -78,7 +61,7 @@ export async function POST(req: Request) {
 
     let image = formData.get("image") as File | null;
     const sampleUrl = String(formData.get("sampleUrl") || "");
-    const direction = String(formData.get("direction") || "SNS 시대");
+    const direction = String(formData.get("direction") || "사회적 고립");
     const artworkTitle = String(
       formData.get("artworkTitle") || "classic artwork"
     );
@@ -108,75 +91,62 @@ export async function POST(req: Request) {
       return Response.json({ error: "이미지가 없습니다." }, { status: 400 });
     }
 
-    const themePrompt =
-      themePrompts[direction] ||
-      "Add minimal modern symbolic elements while preserving the original painting.";
-
     const prompt = `
-You are NOT creating a new digital artwork.
+You are a contemporary art director, museum curator, and historical painting restoration specialist.
 
-You are carefully preserving and minimally editing an existing historical painting.
+You are reinterpreting the classic artwork "${artworkTitle}" through the theme of "${direction}".
 
-Artwork title:
-"${artworkTitle}"
+ABSOLUTE CORE RULE:
+The final image must look as if the ORIGINAL PAINTER personally witnessed modern society and painted this new version by hand.
 
-Modernization theme:
-"${direction}"
+Do not abandon the original painter's style.
 
-The MOST IMPORTANT goal is preserving the original artist’s brushwork, paint texture, and physical painting material.
+The transformation must preserve:
+- original composition
+- original brushwork rhythm
+- original painterly texture
+- original pigment layering
+- original canvas grain
+- original lighting method
+- original color harmony
+- original emotional atmosphere
+- original historical painting materiality
+- original imperfect handmade surface
 
-The artwork must still look like the original hand-painted masterpiece.
+The result must NOT look:
+- photorealistic
+- CGI
+- 3D rendered
+- anime
+- cartoon
+- cyberpunk
+- glossy
+- commercial poster
+- digital collage
+- simple object overlay
+- AI-smooth
+- plastic
+- modern graphic design
 
-Preserve at all costs:
-- original brushstroke direction
-- visible paint texture
-- rough canvas grain
-- layered oil paint feeling
-- imperfect hand-painted details
-- historical pigment texture
-- uneven paint density
-- cracks, noise, and painterly imperfections
-- original lighting and atmosphere
-- original color temperature
-- original composition and framing
+Modern objects must not look pasted on.
+Every modern object must appear physically painted by the original artist using the same brush, paint, texture, and material limitations of the original artwork.
 
-The final image must look physically painted by the original artist,
-NOT digitally generated.
+Theme-specific transformation:
+${prompts[direction] || prompts["사회적 고립"]}
 
-Modern elements must appear as if they were painted by the original artist using the same brush technique and materials.
+Painterly restoration pass:
+After inserting the modern elements, restore the entire image back into the original painterly surface.
+Increase authentic brushstroke consistency.
+Restore historical paint imperfections.
+Restore canvas texture.
+Restore traditional pigment layering.
+Remove digital smoothness.
+Remove modern sharpness.
+Make the contemporary objects dissolve into the original painting's material world.
 
-Only add minimal modern symbolic elements related to the theme.
-
-${themePrompt}
-
-DO NOT:
-- redraw the entire artwork
-- smooth out brushstrokes
-- create clean digital illustration
-- create photorealism
-- use 3D rendering
-- use anime style
-- use cinematic CGI lighting
-- sharpen details artificially
-- replace the painting texture
-- remove canvas imperfections
-- modernize the whole composition
-- create a glossy surface
-- create a poster-like image
-- create a collage or overlay effect
-
-The original painting should remain immediately recognizable at first glance.
-
-Preserve at least 80% of the original artwork visually.
-
-The image must look scanned from a physical painting, not rendered by AI.
-
-Preserve physical oil paint materiality.
-
-Do not smooth out the original brush texture.
-
-Do not make the modern objects look pasted on.
-They must be absorbed into the original brushwork and pigment surface.
+Final goal:
+The image should feel like a disturbing parallel-world version of the original masterpiece.
+It must be visually transformed, emotionally stronger, socially critical, museum-quality, and still unmistakably painterly.
 `;
 
     const result = await openai.images.edit({
