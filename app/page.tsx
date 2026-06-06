@@ -368,7 +368,6 @@ export default function Home() {
 
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = "high";
-
         ctx.drawImage(img, x, y, width, height);
 
         canvas.toBlob((blob) => {
@@ -813,14 +812,8 @@ export default function Home() {
             </div>
 
             <div className="grid gap-6 md:grid-cols-2">
-              <ReportBlock
-                title="판정 이유"
-                content={suitabilityResult.reason || ""}
-              />
-              <ReportBlock
-                title="변환 한계"
-                content={suitabilityResult.limitation || ""}
-              />
+              <ReportBlock title="판정 이유" content={suitabilityResult.reason || ""} />
+              <ReportBlock title="변환 한계" content={suitabilityResult.limitation || ""} />
             </div>
           </section>
         )}
@@ -834,25 +827,13 @@ export default function Home() {
             <h2 className="mb-6 text-3xl md:text-4xl">작품 분석</h2>
 
             <div className="grid gap-6 md:grid-cols-2">
-              <ReportBlock
-                title="원작 이미지 분석"
-                content={curatorReport.originalAnalysis || ""}
-              />
-              <ReportBlock
-                title="현대화 이미지 분석"
-                content={curatorReport.transformedAnalysis || ""}
-              />
+              <ReportBlock title="원작 이미지 분석" content={curatorReport.originalAnalysis || ""} />
+              <ReportBlock title="현대화 이미지 분석" content={curatorReport.transformedAnalysis || ""} />
             </div>
 
             <div className="mt-6 grid gap-6 md:grid-cols-2">
-              <ReportBlock
-                title="변화 과정 설명"
-                content={curatorReport.transformationRationale || ""}
-              />
-              <ReportBlock
-                title="최종 해석 요약"
-                content={curatorReport.finalSummary || ""}
-              />
+              <ReportBlock title="변화 과정 설명" content={curatorReport.transformationRationale || ""} />
+              <ReportBlock title="최종 해석 요약" content={curatorReport.finalSummary || ""} />
             </div>
 
             <ComparisonTable rows={curatorReport.comparisonTable} />
@@ -955,11 +936,6 @@ function ArchiveSection({
 
       <h2 className="mb-4 text-3xl md:text-5xl">다른 사용자의 변환 전시</h2>
 
-      <p className="mb-8 max-w-4xl text-base leading-7 text-white/60 md:text-lg">
-        사용자들이 생성한 현대화 명작 결과가 자동으로 저장되는 전시
-        아카이브입니다.
-      </p>
-
       {loading && <p className="text-xl text-white/60">아카이브를 불러오는 중...</p>}
 
       {!loading && generations.length === 0 && (
@@ -969,55 +945,23 @@ function ArchiveSection({
       <div className="grid gap-5 md:grid-cols-2">
         {generations.map((item) => (
           <div key={item.id} className="bg-white p-4 text-black">
-            <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <p className="text-xs tracking-[0.2em] text-neutral-400">
-                  {item.direction}
-                </p>
-                <h3 className="mt-1 text-2xl">{item.artwork_title}</h3>
-                <p className="text-sm text-neutral-500">{item.artist}</p>
-              </div>
+            <h3 className="mt-1 text-2xl">{item.artwork_title}</h3>
+            <p className="text-sm text-neutral-500">{item.artist}</p>
 
-              <p className="text-xs text-neutral-400">
-                {new Date(item.created_at).toLocaleString("ko-KR")}
-              </p>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
               <button
                 onClick={() => openImageModal(item.original_image, "아카이브 원작")}
                 className="aspect-square overflow-hidden bg-neutral-100"
               >
-                <img
-                  src={item.original_image}
-                  alt="archive original"
-                  className="h-full w-full object-cover transition hover:scale-105"
-                />
+                <img src={item.original_image} alt="archive original" className="h-full w-full object-contain bg-[#111318]" />
               </button>
 
               <button
-                onClick={() =>
-                  openImageModal(item.generated_image, "아카이브 현대화 결과")
-                }
+                onClick={() => openImageModal(item.generated_image, "아카이브 현대화 결과")}
                 className="aspect-square overflow-hidden bg-neutral-100"
               >
-                <img
-                  src={item.generated_image}
-                  alt="archive generated"
-                  className="h-full w-full object-cover transition hover:scale-105"
-                />
+                <img src={item.generated_image} alt="archive generated" className="h-full w-full object-contain bg-[#111318]" />
               </button>
-            </div>
-
-            <div className="mt-4 border-t border-neutral-200 pt-4">
-              <p className="mb-1 text-lg font-semibold">
-                적합도: {item.suitability?.status || "기록 없음"}
-              </p>
-              <p className="line-clamp-4 text-base leading-7 text-neutral-700">
-                {item.curator_report?.finalSummary ||
-                  item.curator_report?.transformationRationale ||
-                  "분석 내용이 없습니다."}
-              </p>
             </div>
 
             {isAdmin && (
@@ -1050,7 +994,7 @@ function ArtworkPanel({
     <div className="rounded-[28px] bg-white p-5 shadow-sm md:p-6">
       <h2 className="mb-5 text-3xl md:text-4xl">{title}</h2>
 
-      <div className="aspect-square overflow-hidden rounded-[20px] bg-neutral-100">
+      <div className="aspect-square overflow-hidden rounded-[20px] bg-[#111318]">
         {image ? (
           <button
             onClick={onImageClick}
@@ -1060,12 +1004,12 @@ function ArtworkPanel({
             <img
               src={image}
               alt={title}
-              className="h-full w-full object-contain bg-[#111318] transition duration-500 hover:scale-105"
+              className="h-full w-full object-contain transition duration-500 hover:scale-105"
             />
           </button>
         ) : isGenerating ? (
-          <div className="flex h-full w-full flex-col items-center justify-center text-xl text-neutral-500">
-            <div className="mb-4 h-8 w-8 animate-spin rounded-full border-2 border-neutral-300 border-t-black" />
+          <div className="flex h-full w-full flex-col items-center justify-center text-xl text-neutral-400">
+            <div className="mb-4 h-8 w-8 animate-spin rounded-full border-2 border-neutral-500 border-t-white" />
             적합도 분석 후 생성 중...
           </div>
         ) : (
@@ -1078,35 +1022,17 @@ function ArtworkPanel({
   );
 }
 
-function ImageModal({
-  image,
-  title,
-  onClose,
-}: {
-  image: string;
-  title: string;
-  onClose: () => void;
-}) {
+function ImageModal({ image, title, onClose }: { image: string; title: string; onClose: () => void }) {
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-6"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-6" onClick={onClose}>
       <div className="relative max-h-full max-w-5xl" onClick={(e) => e.stopPropagation()}>
-        <button
-          onClick={onClose}
-          className="absolute right-0 top-[-54px] rounded-full border border-white/30 px-5 py-2 text-lg text-white transition hover:bg-white hover:text-black"
-        >
+        <button onClick={onClose} className="absolute right-0 top-[-54px] rounded-full border border-white/30 px-5 py-2 text-lg text-white transition hover:bg-white hover:text-black">
           닫기
         </button>
 
         <p className="mb-3 text-xl text-white">{title}</p>
 
-        <img
-          src={image}
-          alt={title}
-          className="max-h-[80vh] max-w-full rounded-[20px] object-contain shadow-2xl"
-        />
+        <img src={image} alt={title} className="max-h-[80vh] max-w-full rounded-[20px] object-contain shadow-2xl" />
       </div>
     </div>
   );
@@ -1167,10 +1093,6 @@ function PromptPanel({ prompt }: { prompt: string }) {
       </p>
 
       <h2 className="mb-5 text-3xl md:text-4xl">AI에게 전달된 창작 지시문</h2>
-
-      <p className="mb-5 max-w-4xl text-base leading-7 text-white/60 md:text-lg">
-        이미지가 어떤 프롬프트 설계를 통해 생성되었는지 보여줍니다.
-      </p>
 
       <pre className="max-h-[420px] overflow-auto whitespace-pre-wrap rounded-[20px] bg-white/10 p-5 text-base leading-7 text-white/80">
         {prompt}
@@ -1236,9 +1158,12 @@ function ReviewSection({
           {[1, 2, 3, 4, 5].map((별) => (
             <button
               key={star}
+              type="button"
               onClick={() => setReviewRating(별)}
               className={`rounded-[14px] border-2 border-black px-5 py-3 text-xl ${
-                reviewRating >= star ? "bg-black text-white" : "bg-white text-black"
+                reviewRating >= star
+                  ? "bg-black text-white"
+                  : "bg-white text-black"
               }`}
             >
               ★
