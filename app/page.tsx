@@ -229,7 +229,11 @@ export default function Home() {
       const response = await fetch("/api/reviews", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rating: reviewRating, name: reviewName, comment: reviewComment }),
+        body: JSON.stringify({
+          rating: reviewRating,
+          name: reviewName,
+          comment: reviewComment,
+        }),
       });
 
       const data = await safeJson(response);
@@ -333,6 +337,59 @@ export default function Home() {
     });
   }
 
+  async function createLetterboxedFile(
+    dataUrl: string,
+    fileName = "letterboxed-input.png",
+    size = 1024
+  ) {
+    return await new Promise<File>((resolve, reject) => {
+      const img = new Image();
+
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+
+        const ctx = canvas.getContext("2d");
+
+        if (!ctx) {
+          reject(new Error("레터박스 캔버스를 만들 수 없습니다."));
+          return;
+        }
+
+        ctx.fillStyle = "#111318";
+        ctx.fillRect(0, 0, size, size);
+
+        const scale = Math.min(size / img.width, size / img.height);
+        const width = img.width * scale;
+        const height = img.height * scale;
+        const x = (size - width) / 2;
+        const y = (size - height) / 2;
+
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+
+        ctx.drawImage(img, x, y, width, height);
+
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            reject(new Error("레터박스 이미지 생성 실패"));
+            return;
+          }
+
+          resolve(
+            new File([blob], fileName, {
+              type: "image/png",
+            })
+          );
+        }, "image/png");
+      };
+
+      img.onerror = () => reject(new Error("이미지를 불러오지 못했습니다."));
+      img.src = dataUrl;
+    });
+  }
+
   async function getAnalyzableImage() {
     if (uploadedFile) return await fileToDataUrl(uploadedFile);
     if (selectedArtwork?.url) return await imageUrlToDataUrl(selectedArtwork.url);
@@ -406,7 +463,9 @@ export default function Home() {
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error(error);
-      alert("이미지 저장이 어려운 브라우저입니다. 이미지를 크게 연 뒤 길게 눌러 저장해주세요.");
+      alert(
+        "이미지 저장이 어려운 브라우저입니다. 이미지를 크게 연 뒤 길게 눌러 저장해주세요."
+      );
     }
   }
 
@@ -491,14 +550,16 @@ export default function Home() {
 
       const formData = new FormData();
 
-      if (uploadedFile) {
-        formData.append("image", uploadedFile);
-      } else {
-        formData.append("sampleUrl", selectedArtwork.url);
-      }
+      const letterboxedFile = await createLetterboxedFile(
+        originalImage,
+        `${selectedArtwork.title}-letterboxed.png`,
+        1024
+      );
 
+      formData.append("image", letterboxedFile);
       formData.append("direction", selectedKeyword);
       formData.append("artworkTitle", selectedArtwork.title);
+      formData.append("preserveLetterbox", "true");
 
       const response = await fetch("/api/generate", {
         method: "POST",
@@ -773,13 +834,25 @@ export default function Home() {
             <h2 className="mb-6 text-3xl md:text-4xl">작품 분석</h2>
 
             <div className="grid gap-6 md:grid-cols-2">
-              <ReportBlock title="원작 이미지 분석" content={curatorReport.originalAnalysis || ""} />
-              <ReportBlock title="현대화 이미지 분석" content={curatorReport.transformedAnalysis || ""} />
+              <ReportBlock
+                title="원작 이미지 분석"
+                content={curatorReport.originalAnalysis || ""}
+              />
+              <ReportBlock
+                title="현대화 이미지 분석"
+                content={curatorReport.transformedAnalysis || ""}
+              />
             </div>
 
             <div className="mt-6 grid gap-6 md:grid-cols-2">
-              <ReportBlock title="변화 과정 설명" content={curatorReport.transformationRationale || ""} />
-              <ReportBlock title="최종 해석 요약" content={curatorReport.finalSummary || ""} />
+              <ReportBlock
+                title="변화 과정 설명"
+                content={curatorReport.transformationRationale || ""}
+              />
+              <ReportBlock
+                title="최종 해석 요약"
+                content={curatorReport.finalSummary || ""}
+              />
             </div>
 
             <ComparisonTable rows={curatorReport.comparisonTable} />
@@ -827,9 +900,7 @@ function AdminPanel({
 }) {
   return (
     <section className="mb-8 rounded-[20px] bg-white/60 p-4">
-      <p className="mb-3 text-xs tracking-[0.3em] text-neutral-500">
-        ADMIN
-      </p>
+      <p className="mb-3 text-xs tracking-[0.3em] text-neutral-500">ADMIN</p>
 
       {isAdmin ? (
         <div className="flex flex-wrap items-center gap-3">
@@ -885,7 +956,8 @@ function ArchiveSection({
       <h2 className="mb-4 text-3xl md:text-5xl">다른 사용자의 변환 전시</h2>
 
       <p className="mb-8 max-w-4xl text-base leading-7 text-white/60 md:text-lg">
-        사용자들이 생성한 현대화 명작 결과가 자동으로 저장되는 전시 아카이브입니다.
+        사용자들이 생성한 현대화 명작 결과가 자동으로 저장되는 전시
+        아카이브입니다.
       </p>
 
       {loading && <p className="text-xl text-white/60">아카이브를 불러오는 중...</p>}
@@ -924,7 +996,9 @@ function ArchiveSection({
               </button>
 
               <button
-                onClick={() => openImageModal(item.generated_image, "아카이브 현대화 결과")}
+                onClick={() =>
+                  openImageModal(item.generated_image, "아카이브 현대화 결과")
+                }
                 className="aspect-square overflow-hidden bg-neutral-100"
               >
                 <img
@@ -978,8 +1052,16 @@ function ArtworkPanel({
 
       <div className="aspect-square overflow-hidden rounded-[20px] bg-neutral-100">
         {image ? (
-          <button onClick={onImageClick} className="h-full w-full cursor-zoom-in overflow-hidden" type="button">
-            <img src={image} alt={title} className="h-full w-full object-cover transition duration-500 hover:scale-105" />
+          <button
+            onClick={onImageClick}
+            className="h-full w-full cursor-zoom-in overflow-hidden"
+            type="button"
+          >
+            <img
+              src={image}
+              alt={title}
+              className="h-full w-full object-contain bg-[#111318] transition duration-500 hover:scale-105"
+            />
           </button>
         ) : isGenerating ? (
           <div className="flex h-full w-full flex-col items-center justify-center text-xl text-neutral-500">
@@ -996,9 +1078,20 @@ function ArtworkPanel({
   );
 }
 
-function ImageModal({ image, title, onClose }: { image: string; title: string; onClose: () => void }) {
+function ImageModal({
+  image,
+  title,
+  onClose,
+}: {
+  image: string;
+  title: string;
+  onClose: () => void;
+}) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-6" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-6"
+      onClick={onClose}
+    >
       <div className="relative max-h-full max-w-5xl" onClick={(e) => e.stopPropagation()}>
         <button
           onClick={onClose}
@@ -1009,7 +1102,11 @@ function ImageModal({ image, title, onClose }: { image: string; title: string; o
 
         <p className="mb-3 text-xl text-white">{title}</p>
 
-        <img src={image} alt={title} className="max-h-[80vh] max-w-full rounded-[20px] object-contain shadow-2xl" />
+        <img
+          src={image}
+          alt={title}
+          className="max-h-[80vh] max-w-full rounded-[20px] object-contain shadow-2xl"
+        />
       </div>
     </div>
   );
@@ -1032,7 +1129,9 @@ function ComparisonTable({ rows }: { rows?: ComparisonRow[] }) {
   return (
     <div className="mt-10 overflow-hidden rounded-[20px] border border-neutral-200">
       <div className="bg-black px-6 py-5 text-white">
-        <p className="text-xs tracking-[0.3em] text-white/50">STRUCTURAL COMPARISON</p>
+        <p className="text-xs tracking-[0.3em] text-white/50">
+          STRUCTURAL COMPARISON
+        </p>
         <h3 className="mt-2 text-3xl">변환 근거 비교표</h3>
       </div>
 
@@ -1107,7 +1206,10 @@ function ReviewSection({
 }) {
   const average =
     reviews.length > 0
-      ? (reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length).toFixed(1)
+      ? (
+          reviews.reduce((sum, review) => sum + review.rating, 0) /
+          reviews.length
+        ).toFixed(1)
       : "0.0";
 
   return (
@@ -1131,10 +1233,10 @@ function ReviewSection({
         />
 
         <div className="flex flex-wrap gap-2">
-          {[1, 2, 3, 4, 5].map((star) => (
+          {[1, 2, 3, 4, 5].map((별) => (
             <button
               key={star}
-              onClick={() => setReviewRating(star)}
+              onClick={() => setReviewRating(별)}
               className={`rounded-[14px] border-2 border-black px-5 py-3 text-xl ${
                 reviewRating >= star ? "bg-black text-white" : "bg-white text-black"
               }`}

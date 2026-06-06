@@ -66,6 +66,9 @@ export async function POST(req: Request) {
       formData.get("artworkTitle") || "classic artwork"
     );
 
+    const preserveLetterbox =
+      String(formData.get("preserveLetterbox") || "false") === "true";
+
     if (!image && sampleUrl) {
       if (sampleUrl.startsWith("/samples/")) {
         image = await localSampleToFile(sampleUrl);
@@ -91,10 +94,28 @@ export async function POST(req: Request) {
       return Response.json({ error: "이미지가 없습니다." }, { status: 400 });
     }
 
+    const letterboxRule = preserveLetterbox
+      ? `
+VERY IMPORTANT LETTERBOX RULE:
+The input image is already placed inside a square canvas with black letterbox areas.
+
+You must preserve the original aspect ratio.
+Do NOT stretch, crop, zoom, or reframe the painting.
+Do NOT expand the painting into the black letterbox area.
+Do NOT paint new content over the black bars.
+Do NOT remove the black letterbox bars.
+The transformed artwork must remain inside the same original image area.
+The black letterbox area must stay clean, flat, and unchanged.
+Only transform the actual painting region, not the black border area.
+`
+      : "";
+
     const prompt = `
 You are a contemporary art director, museum curator, and historical painting restoration specialist.
 
 You are reinterpreting the classic artwork "${artworkTitle}" through the theme of "${direction}".
+
+${letterboxRule}
 
 ABSOLUTE CORE RULE:
 The final image must look as if the ORIGINAL PAINTER personally witnessed modern society and painted this new version by hand.
@@ -103,6 +124,8 @@ Do not abandon the original painter's style.
 
 The transformation must preserve:
 - original composition
+- original aspect ratio
+- original framing
 - original brushwork rhythm
 - original painterly texture
 - original pigment layering
@@ -135,7 +158,7 @@ Theme-specific transformation:
 ${prompts[direction] || prompts["사회적 고립"]}
 
 Painterly restoration pass:
-After inserting the modern elements, restore the entire image back into the original painterly surface.
+After inserting the modern elements, restore the transformed painting region back into the original painterly surface.
 Increase authentic brushstroke consistency.
 Restore historical paint imperfections.
 Restore canvas texture.
