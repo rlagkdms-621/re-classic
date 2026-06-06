@@ -24,6 +24,14 @@ const keywords = ["사회적 고립", "환경 위기"];
 
 type Artwork = { title: string; artist: string; url: string };
 
+type LetterboxRect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  canvasSize: number;
+};
+
 type SuitabilityResult = {
   status?: "변환 가능" | "변화 조금 어려움" | "변환 어려움";
   canGenerate?: boolean;
@@ -152,9 +160,7 @@ export default function Home() {
 
       const data = await safeJson(response);
 
-      if (!response.ok) {
-        throw new Error(data.error || "후기 삭제 실패");
-      }
+      if (!response.ok) throw new Error(data.error || "후기 삭제 실패");
 
       await loadReviews();
     } catch (error: any) {
@@ -177,9 +183,7 @@ export default function Home() {
 
       const data = await safeJson(response);
 
-      if (!response.ok) {
-        throw new Error(data.error || "전시 작품 삭제 실패");
-      }
+      if (!response.ok) throw new Error(data.error || "전시 작품 삭제 실패");
 
       await loadGenerations();
     } catch (error: any) {
@@ -192,9 +196,7 @@ export default function Home() {
       const response = await fetch("/api/reviews");
       const data = await safeJson(response);
 
-      if (response.ok) {
-        setReviews(data.reviews || []);
-      }
+      if (response.ok) setReviews(data.reviews || []);
     } catch (error) {
       console.error("REVIEWS_LOAD_ERROR:", error);
     }
@@ -207,9 +209,7 @@ export default function Home() {
       const response = await fetch("/api/generations");
       const data = await safeJson(response);
 
-      if (response.ok) {
-        setGenerations(data.generations || []);
-      }
+      if (response.ok) setGenerations(data.generations || []);
     } catch (error) {
       console.error("GENERATIONS_LOAD_ERROR:", error);
     } finally {
@@ -238,9 +238,7 @@ export default function Home() {
 
       const data = await safeJson(response);
 
-      if (!response.ok) {
-        throw new Error(data.error || "후기 저장 실패");
-      }
+      if (!response.ok) throw new Error(data.error || "후기 저장 실패");
 
       setReviewName("");
       setReviewComment("");
@@ -337,12 +335,16 @@ export default function Home() {
     });
   }
 
-  async function createLetterboxedFile(
+  async function createLetterboxedInput(
     dataUrl: string,
     fileName = "letterboxed-input.png",
     size = 1024
   ) {
-    return await new Promise<File>((resolve, reject) => {
+    return await new Promise<{
+      file: File;
+      dataUrl: string;
+      rect: LetterboxRect;
+    }>((resolve, reject) => {
       const img = new Image();
 
       img.onload = () => {
@@ -370,22 +372,84 @@ export default function Home() {
         ctx.imageSmoothingQuality = "high";
         ctx.drawImage(img, x, y, width, height);
 
+        const outputDataUrl = canvas.toDataURL("image/png");
+
         canvas.toBlob((blob) => {
           if (!blob) {
             reject(new Error("레터박스 이미지 생성 실패"));
             return;
           }
 
-          resolve(
-            new File([blob], fileName, {
-              type: "image/png",
-            })
-          );
+          resolve({
+            file: new File([blob], fileName, { type: "image/png" }),
+            dataUrl: outputDataUrl,
+            rect: {
+              x,
+              y,
+              width,
+              height,
+              canvasSize: size,
+            },
+          });
         }, "image/png");
       };
 
       img.onerror = () => reject(new Error("이미지를 불러오지 못했습니다."));
       img.src = dataUrl;
+    });
+  }
+
+  async function forceGeneratedImageToOriginalRatio(
+    generatedDataUrl: string,
+    rect: LetterboxRect
+  ) {
+    return await new Promise<string>((resolve, reject) => {
+      const img = new Image();
+
+      img.onload = () => {
+        const size = rect.canvasSize;
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+
+        const ctx = canvas.getContext("2d");
+
+        if (!ctx) {
+          reject(new Error("결과 레터박스 캔버스를 만들 수 없습니다."));
+          return;
+        }
+
+        ctx.fillStyle = "#111318";
+        ctx.fillRect(0, 0, size, size);
+
+        const sourceScaleX = img.width / size;
+        const sourceScaleY = img.height / size;
+
+        const sx = rect.x * sourceScaleX;
+        const sy = rect.y * sourceScaleY;
+        const sw = rect.width * sourceScaleX;
+        const sh = rect.height * sourceScaleY;
+
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+
+        ctx.drawImage(
+          img,
+          sx,
+          sy,
+          sw,
+          sh,
+          rect.x,
+          rect.y,
+          rect.width,
+          rect.height
+        );
+
+        resolve(canvas.toDataURL("image/png"));
+      };
+
+      img.onerror = () => reject(new Error("생성 이미지를 후처리할 수 없습니다."));
+      img.src = generatedDataUrl;
     });
   }
 
@@ -462,9 +526,7 @@ export default function Home() {
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error(error);
-      alert(
-        "이미지 저장이 어려운 브라우저입니다. 이미지를 크게 연 뒤 길게 눌러 저장해주세요."
-      );
+      alert("이미지 저장이 어려운 브라우저입니다. 이미지를 크게 연 뒤 길게 눌러 저장해주세요.");
     }
   }
 
@@ -481,9 +543,7 @@ export default function Home() {
 
     const data = await safeJson(response);
 
-    if (!response.ok) {
-      throw new Error(data.error || "적합도 분석 실패");
-    }
+    if (!response.ok) throw new Error(data.error || "적합도 분석 실패");
 
     const suitability = data.suitability as SuitabilityResult;
     const status = String(suitability.status || "").replace(/\s/g, "");
@@ -522,15 +582,21 @@ export default function Home() {
 
     try {
       const originalImage = await getAnalyzableImage();
-      const compressedOriginalImage = await compressDataUrl(originalImage);
+
+      const letterboxedInput = await createLetterboxedInput(
+        originalImage,
+        `${selectedArtwork.title}-letterboxed.png`,
+        1024
+      );
+
+      const compressedOriginalImage = await compressDataUrl(letterboxedInput.dataUrl);
 
       const suitability = await runSuitabilityCheck(compressedOriginalImage);
       const normalizedStatus = String(suitability.status || "").replace(/\s/g, "");
 
       const isBlocked =
         suitability.canGenerate === false ||
-        (normalizedStatus.includes("어려움") &&
-          !normalizedStatus.includes("조금"));
+        (normalizedStatus.includes("어려움") && !normalizedStatus.includes("조금"));
 
       if (isBlocked) {
         setSuitabilityResult({
@@ -549,16 +615,11 @@ export default function Home() {
 
       const formData = new FormData();
 
-      const letterboxedFile = await createLetterboxedFile(
-        originalImage,
-        `${selectedArtwork.title}-letterboxed.png`,
-        1024
-      );
-
-      formData.append("image", letterboxedFile);
+      formData.append("image", letterboxedInput.file);
       formData.append("direction", selectedKeyword);
       formData.append("artworkTitle", selectedArtwork.title);
       formData.append("preserveLetterbox", "true");
+      formData.append("letterboxRect", JSON.stringify(letterboxedInput.rect));
 
       const response = await fetch("/api/generate", {
         method: "POST",
@@ -567,14 +628,17 @@ export default function Home() {
 
       const data = await safeJson(response);
 
-      if (!response.ok) {
-        throw new Error(data.error || "이미지 생성 실패");
-      }
+      if (!response.ok) throw new Error(data.error || "이미지 생성 실패");
 
-      setResultImage(data.image);
+      const ratioFixedImage = await forceGeneratedImageToOriginalRatio(
+        data.image,
+        letterboxedInput.rect
+      );
+
+      setResultImage(ratioFixedImage);
       setUsedPrompt(data.usedPrompt || "");
 
-      const compressedGeneratedImage = await compressDataUrl(data.image);
+      const compressedGeneratedImage = await compressDataUrl(ratioFixedImage);
 
       try {
         const analyzeResponse = await fetch("/api/analyze", {
@@ -614,17 +678,13 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-[#e7e2d8] px-4 py-6 text-[#1a1a1a] md:px-8 md:py-8">
       <div className="mx-auto max-w-6xl">
-        <p className="mb-2 text-xs tracking-[0.35em] text-neutral-500">
-          RE-CLASSIC
-        </p>
+        <p className="mb-2 text-xs tracking-[0.35em] text-neutral-500">RE-CLASSIC</p>
 
         <h1 className="mb-3 text-4xl leading-tight md:text-6xl">
           현대를 입은 명작
         </h1>
 
-        <p className="text-base text-neutral-700 md:text-lg">
-          명화는 변하지 않았다.
-        </p>
+        <p className="text-base text-neutral-700 md:text-lg">명화는 변하지 않았다.</p>
         <p className="mb-10 text-base text-neutral-700 md:text-lg">
           변한 것은 우리가 살아가는 시대였다.
         </p>
@@ -645,9 +705,7 @@ export default function Home() {
             }}
             className="w-full rounded-[20px] border-2 border-black bg-black px-6 py-5 text-xl font-semibold text-white transition hover:scale-[1.01] md:text-2xl"
           >
-            {showArchive
-              ? "전시 아카이브 닫기"
-              : "다른 사용자의 변환 이미지 구경하기"}
+            {showArchive ? "전시 아카이브 닫기" : "다른 사용자의 변환 이미지 구경하기"}
           </button>
         </section>
 
@@ -696,12 +754,7 @@ export default function Home() {
           <h2 className="mb-5 text-3xl md:text-4xl">직접 업로드</h2>
 
           <label className="block cursor-pointer rounded-[22px] border-2 border-dashed border-neutral-500 bg-white/60 p-7 text-center transition hover:border-black hover:bg-white">
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleUpload}
-              className="hidden"
-            />
+            <input type="file" accept="image/*" onChange={handleUpload} className="hidden" />
 
             <p className="mb-2 text-2xl font-semibold">이미지를 업로드해주세요</p>
 
@@ -951,16 +1004,24 @@ function ArchiveSection({
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <button
                 onClick={() => openImageModal(item.original_image, "아카이브 원작")}
-                className="aspect-square overflow-hidden bg-neutral-100"
+                className="aspect-square overflow-hidden bg-[#111318]"
               >
-                <img src={item.original_image} alt="archive original" className="h-full w-full object-contain bg-[#111318]" />
+                <img
+                  src={item.original_image}
+                  alt="archive original"
+                  className="h-full w-full object-contain"
+                />
               </button>
 
               <button
                 onClick={() => openImageModal(item.generated_image, "아카이브 현대화 결과")}
-                className="aspect-square overflow-hidden bg-neutral-100"
+                className="aspect-square overflow-hidden bg-[#111318]"
               >
-                <img src={item.generated_image} alt="archive generated" className="h-full w-full object-contain bg-[#111318]" />
+                <img
+                  src={item.generated_image}
+                  alt="archive generated"
+                  className="h-full w-full object-contain"
+                />
               </button>
             </div>
 
@@ -1022,17 +1083,35 @@ function ArtworkPanel({
   );
 }
 
-function ImageModal({ image, title, onClose }: { image: string; title: string; onClose: () => void }) {
+function ImageModal({
+  image,
+  title,
+  onClose,
+}: {
+  image: string;
+  title: string;
+  onClose: () => void;
+}) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-6" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-6"
+      onClick={onClose}
+    >
       <div className="relative max-h-full max-w-5xl" onClick={(e) => e.stopPropagation()}>
-        <button onClick={onClose} className="absolute right-0 top-[-54px] rounded-full border border-white/30 px-5 py-2 text-lg text-white transition hover:bg-white hover:text-black">
+        <button
+          onClick={onClose}
+          className="absolute right-0 top-[-54px] rounded-full border border-white/30 px-5 py-2 text-lg text-white transition hover:bg-white hover:text-black"
+        >
           닫기
         </button>
 
         <p className="mb-3 text-xl text-white">{title}</p>
 
-        <img src={image} alt={title} className="max-h-[80vh] max-w-full rounded-[20px] object-contain shadow-2xl" />
+        <img
+          src={image}
+          alt={title}
+          className="max-h-[80vh] max-w-full rounded-[20px] object-contain shadow-2xl"
+        />
       </div>
     </div>
   );
@@ -1161,9 +1240,7 @@ function ReviewSection({
               type="button"
               onClick={() => setReviewRating(별)}
               className={`rounded-[14px] border-2 border-black px-5 py-3 text-xl ${
-                reviewRating >= star
-                  ? "bg-black text-white"
-                  : "bg-white text-black"
+                reviewRating >= star ? "bg-black text-white" : "bg-white text-black"
               }`}
             >
               ★

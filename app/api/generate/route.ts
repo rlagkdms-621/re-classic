@@ -10,43 +10,23 @@ const openai = new OpenAI({
 
 const prompts: Record<string, string> = {
   "사회적 고립": `
-Transform the classical painting into a haunting reinterpretation of social isolation.
+Transform only the actual painting area into a reinterpretation of social isolation.
 
-Modern intervention:
-Add emotional distance, lonely figures, separated groups, cold public spaces, silent crowds, glass barriers, isolated rooms, distant windows, and subtle signs of disconnection.
+Use emotional distance, separated figures, silent crowds, cold public spaces, glass barriers, isolated rooms, distant windows, and subtle signs of disconnection.
 
-Emotional direction:
-The image should feel socially disconnected, silent, cold, lonely, and psychologically isolated.
-
-Style preservation:
-Every added element must be physically painted in the original painter's exact style.
-Figures, spaces, lights, and crowds must share the same brushstroke rhythm, paint texture, and pigment behavior as the original artwork.
+Do not change the aspect ratio or framing logic.
+The scene should feel socially disconnected, silent, cold, lonely, and psychologically isolated.
 `,
 
   "환경 위기": `
-Transform the classical painting into a devastating reinterpretation of environmental crisis.
+Transform only the actual painting area into a reinterpretation of environmental crisis.
 
-Modern intervention:
-Add polluted water, plastic waste, industrial smoke, dying plants, toxic sky, flooding, dry soil, climate collapse, and ecological decay.
+Use polluted water, plastic waste, industrial smoke, dying plants, toxic sky, flooding, dry soil, climate collapse, and ecological decay.
 
-Emotional direction:
+Do not change the aspect ratio or framing logic.
 The original beauty should feel fragile, contaminated, tragic, and slowly collapsing.
-
-Style preservation:
-Every environmental crisis element must be physically painted in the original painter's exact style.
-Pollution, smoke, water, plastic, and damaged nature must look like they belong inside the original painting, not like modern objects placed on top.
 `,
 };
-
-async function localSampleToFile(sampleUrl: string) {
-  const cleanPath = sampleUrl.replace(/^\/+/, "");
-  const filePath = path.join(process.cwd(), "public", cleanPath);
-  const buffer = await readFile(filePath);
-
-  return new File([buffer], path.basename(filePath), {
-    type: "image/jpeg",
-  });
-}
 
 export async function POST(req: Request) {
   try {
@@ -62,30 +42,17 @@ export async function POST(req: Request) {
     let image = formData.get("image") as File | null;
     const sampleUrl = String(formData.get("sampleUrl") || "");
     const direction = String(formData.get("direction") || "사회적 고립");
-    const artworkTitle = String(
-      formData.get("artworkTitle") || "classic artwork"
-    );
-
-    const preserveLetterbox =
-      String(formData.get("preserveLetterbox") || "false") === "true";
+    const artworkTitle = String(formData.get("artworkTitle") || "classic artwork");
+    const letterboxRect = String(formData.get("letterboxRect") || "");
 
     if (!image && sampleUrl) {
       if (sampleUrl.startsWith("/samples/")) {
-        image = await localSampleToFile(sampleUrl);
-      } else {
-        const res = await fetch(sampleUrl);
+        const cleanPath = sampleUrl.replace(/^\/+/, "");
+        const filePath = path.join(process.cwd(), "public", cleanPath);
+        const buffer = await readFile(filePath);
 
-        if (!res.ok) {
-          return Response.json(
-            { error: "샘플 이미지를 불러오지 못했습니다." },
-            { status: 400 }
-          );
-        }
-
-        const blob = await res.blob();
-
-        image = new File([blob], "sample-artwork.jpg", {
-          type: blob.type || "image/jpeg",
+        image = new File([buffer], path.basename(filePath), {
+          type: "image/jpeg",
         });
       }
     }
@@ -94,82 +61,66 @@ export async function POST(req: Request) {
       return Response.json({ error: "이미지가 없습니다." }, { status: 400 });
     }
 
-    const letterboxRule = preserveLetterbox
-      ? `
-VERY IMPORTANT LETTERBOX RULE:
-The input image is already placed inside a square canvas with black letterbox areas.
-
-You must preserve the original aspect ratio.
-Do NOT stretch, crop, zoom, or reframe the painting.
-Do NOT expand the painting into the black letterbox area.
-Do NOT paint new content over the black bars.
-Do NOT remove the black letterbox bars.
-The transformed artwork must remain inside the same original image area.
-The black letterbox area must stay clean, flat, and unchanged.
-Only transform the actual painting region, not the black border area.
-`
-      : "";
-
     const prompt = `
-You are a contemporary art director, museum curator, and historical painting restoration specialist.
+You are editing a letterboxed classic painting.
 
-You are reinterpreting the classic artwork "${artworkTitle}" through the theme of "${direction}".
+The input is a 1024x1024 square canvas.
+Inside that square canvas, the original artwork occupies only its original aspect-ratio region.
+The remaining areas are black letterbox bars.
 
-${letterboxRule}
+Original artwork:
+"${artworkTitle}"
 
-ABSOLUTE CORE RULE:
-The final image must look as if the ORIGINAL PAINTER personally witnessed modern society and painted this new version by hand.
+Modernization theme:
+"${direction}"
 
-Do not abandon the original painter's style.
+Letterbox region data:
+${letterboxRect}
 
-The transformation must preserve:
-- original composition
-- original aspect ratio
-- original framing
-- original brushwork rhythm
-- original painterly texture
-- original pigment layering
-- original canvas grain
-- original lighting method
-- original color harmony
-- original emotional atmosphere
-- original historical painting materiality
-- original imperfect handmade surface
+CRITICAL RULE:
+Do not treat the whole 1024x1024 canvas as the artwork.
+Only the non-black artwork region is the actual painting.
+The black bars are not part of the painting.
 
-The result must NOT look:
-- photorealistic
+You must keep the original painting's aspect ratio.
+You must not stretch the painting.
+You must not crop the painting.
+You must not reframe the painting.
+You must not expand the painting into the black bars.
+
+If the original artwork is panoramic, the result must still feel panoramic.
+If the original artwork is vertical, the result must still feel vertical.
+If the original artwork is extremely wide, the result must remain extremely wide.
+
+Transform only the painting region conceptually.
+The final result may still be returned as a square image, but the composition must be designed for the same original aspect-ratio region.
+
+Style preservation:
+- preserve original composition
+- preserve original aspect ratio
+- preserve original framing
+- preserve original brushwork rhythm
+- preserve original painterly texture
+- preserve original color harmony
+- preserve original emotional atmosphere
+- preserve original historical painting materiality
+
+Do not create:
+- photorealistic image
 - CGI
-- 3D rendered
+- 3D render
 - anime
 - cartoon
-- cyberpunk
-- glossy
 - commercial poster
 - digital collage
 - simple object overlay
-- AI-smooth
-- plastic
-- modern graphic design
+- AI-smooth modern illustration
 
-Modern objects must not look pasted on.
-Every modern object must appear physically painted by the original artist using the same brush, paint, texture, and material limitations of the original artwork.
-
-Theme-specific transformation:
+Theme-specific instruction:
 ${prompts[direction] || prompts["사회적 고립"]}
 
-Painterly restoration pass:
-After inserting the modern elements, restore the transformed painting region back into the original painterly surface.
-Increase authentic brushstroke consistency.
-Restore historical paint imperfections.
-Restore canvas texture.
-Restore traditional pigment layering.
-Remove digital smoothness.
-Remove modern sharpness.
-Make the contemporary objects dissolve into the original painting's material world.
-
 Final goal:
-The image should feel like a disturbing parallel-world version of the original masterpiece.
-It must be visually transformed, emotionally stronger, socially critical, museum-quality, and still unmistakably painterly.
+Create a modern reinterpretation that still visually respects the original artwork's unusual proportions.
 `;
 
     const result = await openai.images.edit({
