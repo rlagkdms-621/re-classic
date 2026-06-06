@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import LetterboxMaker from "./components/LetterboxMaker";
 
 const sampleArtworks = [
   { title: "절규", artist: "Edvard Munch", url: "/samples/1.jpg" },
@@ -786,6 +787,8 @@ export default function Home() {
         )}
 
         {usedPrompt && <PromptPanel prompt={usedPrompt} />}
+
+        <LetterboxMaker />
 
         <ReviewSection
           reviews={reviews}
