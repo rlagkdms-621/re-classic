@@ -335,9 +335,22 @@ export default function Home() {
     });
   }
 
-  async function createLetterboxedInput(
+  function drawMarkerBackground(ctx: CanvasRenderingContext2D, size: number, tile = 20) {
+    const colorA = "#ff0048";
+    const colorB = "#00ff5a";
+
+    for (let y = 0; y < size; y += tile) {
+      for (let x = 0; x < size; x += tile) {
+        const isEven = (Math.floor(x / tile) + Math.floor(y / tile)) % 2 === 0;
+        ctx.fillStyle = isEven ? colorA : colorB;
+        ctx.fillRect(x, y, tile, tile);
+      }
+    }
+  }
+
+  async function createMarkerLetterboxedInput(
     dataUrl: string,
-    fileName = "letterboxed-input.png",
+    fileName = "marker-letterboxed-input.png",
     size = 1024
   ) {
     return await new Promise<{
@@ -355,12 +368,11 @@ export default function Home() {
         const ctx = canvas.getContext("2d");
 
         if (!ctx) {
-          reject(new Error("레터박스 캔버스를 만들 수 없습니다."));
+          reject(new Error("마커 레터박스 캔버스를 만들 수 없습니다."));
           return;
         }
 
-        ctx.fillStyle = "#111318";
-        ctx.fillRect(0, 0, size, size);
+        drawMarkerBackground(ctx, size);
 
         const scale = Math.min(size / img.width, size / img.height);
         const width = img.width * scale;
@@ -376,7 +388,7 @@ export default function Home() {
 
         canvas.toBlob((blob) => {
           if (!blob) {
-            reject(new Error("레터박스 이미지 생성 실패"));
+            reject(new Error("마커 레터박스 이미지 생성 실패"));
             return;
           }
 
@@ -399,7 +411,7 @@ export default function Home() {
     });
   }
 
-  async function forceGeneratedImageToOriginalRatio(
+  async function removeMarkerAndRestoreOriginalRatio(
     generatedDataUrl: string,
     rect: LetterboxRect
   ) {
@@ -407,28 +419,26 @@ export default function Home() {
       const img = new Image();
 
       img.onload = () => {
-        const size = rect.canvasSize;
-        const canvas = document.createElement("canvas");
-        canvas.width = size;
-        canvas.height = size;
+        const sourceSize = rect.canvasSize;
 
-        const ctx = canvas.getContext("2d");
-
-        if (!ctx) {
-          reject(new Error("결과 레터박스 캔버스를 만들 수 없습니다."));
-          return;
-        }
-
-        ctx.fillStyle = "#111318";
-        ctx.fillRect(0, 0, size, size);
-
-        const sourceScaleX = img.width / size;
-        const sourceScaleY = img.height / size;
+        const sourceScaleX = img.width / sourceSize;
+        const sourceScaleY = img.height / sourceSize;
 
         const sx = rect.x * sourceScaleX;
         const sy = rect.y * sourceScaleY;
         const sw = rect.width * sourceScaleX;
         const sh = rect.height * sourceScaleY;
+
+        const outputCanvas = document.createElement("canvas");
+        outputCanvas.width = Math.round(rect.width);
+        outputCanvas.height = Math.round(rect.height);
+
+        const ctx = outputCanvas.getContext("2d");
+
+        if (!ctx) {
+          reject(new Error("마커 제거 캔버스를 만들 수 없습니다."));
+          return;
+        }
 
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = "high";
@@ -439,13 +449,13 @@ export default function Home() {
           sy,
           sw,
           sh,
-          rect.x,
-          rect.y,
-          rect.width,
-          rect.height
+          0,
+          0,
+          outputCanvas.width,
+          outputCanvas.height
         );
 
-        resolve(canvas.toDataURL("image/png"));
+        resolve(outputCanvas.toDataURL("image/png"));
       };
 
       img.onerror = () => reject(new Error("생성 이미지를 후처리할 수 없습니다."));
@@ -583,13 +593,13 @@ export default function Home() {
     try {
       const originalImage = await getAnalyzableImage();
 
-      const letterboxedInput = await createLetterboxedInput(
+      const markerInput = await createMarkerLetterboxedInput(
         originalImage,
-        `${selectedArtwork.title}-letterboxed.png`,
+        `${selectedArtwork.title}-marker-letterboxed.png`,
         1024
       );
 
-      const compressedOriginalImage = await compressDataUrl(letterboxedInput.dataUrl);
+      const compressedOriginalImage = await compressDataUrl(markerInput.dataUrl);
 
       const suitability = await runSuitabilityCheck(compressedOriginalImage);
       const normalizedStatus = String(suitability.status || "").replace(/\s/g, "");
@@ -615,11 +625,11 @@ export default function Home() {
 
       const formData = new FormData();
 
-      formData.append("image", letterboxedInput.file);
+      formData.append("image", markerInput.file);
       formData.append("direction", selectedKeyword);
       formData.append("artworkTitle", selectedArtwork.title);
       formData.append("preserveLetterbox", "true");
-      formData.append("letterboxRect", JSON.stringify(letterboxedInput.rect));
+      formData.append("letterboxRect", JSON.stringify(markerInput.rect));
 
       const response = await fetch("/api/generate", {
         method: "POST",
@@ -630,15 +640,15 @@ export default function Home() {
 
       if (!response.ok) throw new Error(data.error || "이미지 생성 실패");
 
-      const ratioFixedImage = await forceGeneratedImageToOriginalRatio(
+      const finalImage = await removeMarkerAndRestoreOriginalRatio(
         data.image,
-        letterboxedInput.rect
+        markerInput.rect
       );
 
-      setResultImage(ratioFixedImage);
+      setResultImage(finalImage);
       setUsedPrompt(data.usedPrompt || "");
 
-      const compressedGeneratedImage = await compressDataUrl(ratioFixedImage);
+      const compressedGeneratedImage = await compressDataUrl(finalImage);
 
       try {
         const analyzeResponse = await fetch("/api/analyze", {
@@ -1234,11 +1244,11 @@ function ReviewSection({
         />
 
         <div className="flex flex-wrap gap-2">
-          {[1, 2, 3, 4, 5].map((별) => (
+          {[1, 2, 3, 4, 5].map((star) => (
             <button
               key={star}
               type="button"
-              onClick={() => setReviewRating(별)}
+              onClick={() => setReviewRating(star)}
               className={`rounded-[14px] border-2 border-black px-5 py-3 text-xl ${
                 reviewRating >= star ? "bg-black text-white" : "bg-white text-black"
               }`}

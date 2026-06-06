@@ -10,20 +10,18 @@ const openai = new OpenAI({
 
 const prompts: Record<string, string> = {
   "사회적 고립": `
-Transform only the actual painting area into a reinterpretation of social isolation.
+Transform the actual painting region into a reinterpretation of social isolation.
 
 Use emotional distance, separated figures, silent crowds, cold public spaces, glass barriers, isolated rooms, distant windows, and subtle signs of disconnection.
 
-Do not change the aspect ratio or framing logic.
 The scene should feel socially disconnected, silent, cold, lonely, and psychologically isolated.
 `,
 
   "환경 위기": `
-Transform only the actual painting area into a reinterpretation of environmental crisis.
+Transform the actual painting region into a reinterpretation of environmental crisis.
 
 Use polluted water, plastic waste, industrial smoke, dying plants, toxic sky, flooding, dry soil, climate collapse, and ecological decay.
 
-Do not change the aspect ratio or framing logic.
 The original beauty should feel fragile, contaminated, tragic, and slowly collapsing.
 `,
 };
@@ -42,7 +40,9 @@ export async function POST(req: Request) {
     let image = formData.get("image") as File | null;
     const sampleUrl = String(formData.get("sampleUrl") || "");
     const direction = String(formData.get("direction") || "사회적 고립");
-    const artworkTitle = String(formData.get("artworkTitle") || "classic artwork");
+    const artworkTitle = String(
+      formData.get("artworkTitle") || "classic artwork"
+    );
     const letterboxRect = String(formData.get("letterboxRect") || "");
 
     if (!image && sampleUrl) {
@@ -62,48 +62,54 @@ export async function POST(req: Request) {
     }
 
     const prompt = `
-You are editing a letterboxed classic painting.
+You are editing a classic painting that has been temporarily placed inside a square canvas with bright marker bars.
 
-The input is a 1024x1024 square canvas.
-Inside that square canvas, the original artwork occupies only its original aspect-ratio region.
-The remaining areas are black letterbox bars.
+IMPORTANT INPUT STRUCTURE:
+- The input image is a 1024x1024 square canvas.
+- The actual artwork is inside the center region.
+- The empty letterbox areas are filled with a bright red and green checkerboard marker.
+- The checkerboard marker is NOT part of the painting.
+- The marker exists only to show the AI which area must be ignored.
 
-Original artwork:
+Artwork title:
 "${artworkTitle}"
 
 Modernization theme:
 "${direction}"
 
-Letterbox region data:
+Artwork region information:
 ${letterboxRect}
 
-CRITICAL RULE:
-Do not treat the whole 1024x1024 canvas as the artwork.
-Only the non-black artwork region is the actual painting.
-The black bars are not part of the painting.
+ABSOLUTE RULE ABOUT MARKERS:
+Do NOT paint over the red and green checkerboard marker areas.
+Do NOT use the marker pattern as part of the artwork.
+Do NOT copy the marker pattern into the painting.
+Do NOT expand the painting into the marker area.
+Do NOT remove the marker area.
+Do NOT redesign the whole square image.
 
-You must keep the original painting's aspect ratio.
-You must not stretch the painting.
-You must not crop the painting.
-You must not reframe the painting.
-You must not expand the painting into the black bars.
+ONLY transform the actual artwork region.
+The artwork must stay inside the same rectangular region.
+The original unusual aspect ratio must be respected.
 
-If the original artwork is panoramic, the result must still feel panoramic.
-If the original artwork is vertical, the result must still feel vertical.
-If the original artwork is extremely wide, the result must remain extremely wide.
+If the original artwork is very wide, the transformed artwork must still be very wide.
+If the original artwork is vertical, the transformed artwork must still be vertical.
+Do not stretch, crop, zoom, or reframe the painting.
 
-Transform only the painting region conceptually.
-The final result may still be returned as a square image, but the composition must be designed for the same original aspect-ratio region.
+After generation, the marker areas will be removed by the program.
+Therefore, the final useful image is only the artwork region.
 
-Style preservation:
-- preserve original composition
-- preserve original aspect ratio
-- preserve original framing
-- preserve original brushwork rhythm
-- preserve original painterly texture
-- preserve original color harmony
-- preserve original emotional atmosphere
-- preserve original historical painting materiality
+STYLE RULES:
+The transformation must preserve:
+- original aspect ratio
+- original framing
+- original composition logic
+- original brushwork rhythm
+- original painterly texture
+- original pigment feeling
+- original color harmony
+- original emotional atmosphere
+- historical painting materiality
 
 Do not create:
 - photorealistic image
@@ -113,14 +119,15 @@ Do not create:
 - cartoon
 - commercial poster
 - digital collage
-- simple object overlay
-- AI-smooth modern illustration
+- clean digital illustration
 
 Theme-specific instruction:
 ${prompts[direction] || prompts["사회적 고립"]}
 
 Final goal:
-Create a modern reinterpretation that still visually respects the original artwork's unusual proportions.
+Create a transformed version of the painting region only.
+The red and green marker bars must remain visually separate and ignored.
+The artwork must preserve its original proportion so that the program can remove the marker bars afterward and produce a correctly proportioned final image.
 `;
 
     const result = await openai.images.edit({
